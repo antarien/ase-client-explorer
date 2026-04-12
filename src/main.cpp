@@ -475,9 +475,9 @@ private:
 
         m_tree_model = Gtk::TreeListModel::create(
             root_store,
+            sigc::mem_fun(*this, &ExplorerWindow::create_child_model_slot),
             false, // passthrough = false (we wrap items in TreeListRow)
-            true,  // autoexpand = false initially
-            sigc::mem_fun(*this, &ExplorerWindow::create_child_model_slot));
+            true); // autoexpand
 
         m_selection = Gtk::SingleSelection::create(m_tree_model);
         m_selection->set_autoselect(false);
@@ -597,7 +597,7 @@ private:
         // Open file with default application
         auto file = Gio::File::create_for_path(entry->full_path);
         auto launcher = Gtk::FileLauncher::create(file);
-        launcher->launch(dynamic_cast<Gtk::Window&>(*this), nullptr);
+        launcher->launch(dynamic_cast<Gtk::Window&>(*this), [](Glib::RefPtr<Gio::AsyncResult>&) {});
     }
 
     void on_right_click(double x, double y) {
@@ -618,7 +618,7 @@ private:
         group->add_action("open-with", [this, entry]() {
             auto file = Gio::File::create_for_path(entry->full_path);
             auto launcher = Gtk::FileLauncher::create(file);
-            launcher->open_containing_folder(dynamic_cast<Gtk::Window&>(*this), nullptr);
+            launcher->open_containing_folder(dynamic_cast<Gtk::Window&>(*this), [](Glib::RefPtr<Gio::AsyncResult>&) {});
         });
         group->add_action("copy-path", [this]() { copy_path_to_clipboard(false); });
         group->add_action("copy-rel-path", [this]() { copy_path_to_clipboard(true); });
@@ -633,7 +633,7 @@ private:
                                            : fs::path(entry->full_path).parent_path().string();
             auto file = Gio::File::create_for_path(dir);
             auto launcher = Gtk::FileLauncher::create(file);
-            launcher->launch(dynamic_cast<Gtk::Window&>(*this), nullptr);
+            launcher->launch(dynamic_cast<Gtk::Window&>(*this), [](Glib::RefPtr<Gio::AsyncResult>&) {});
         });
         m_list_view.insert_action_group("explorer", group);
 
@@ -659,7 +659,7 @@ private:
 
     void setup_file_monitor() {
         auto root_file = Gio::File::create_for_path(m_root_path);
-        m_file_monitor = root_file->monitor_directory(Gio::FileMonitor::Flags::WATCH_MOVES);
+        m_file_monitor = root_file->monitor_directory(Gio::FileMonitorFlags::WATCH_MOVES);
         m_file_monitor->signal_changed().connect(
             [this](const Glib::RefPtr<Gio::File>&, const Glib::RefPtr<Gio::File>&,
                    Gio::FileMonitor::Event) {
@@ -758,10 +758,8 @@ private:
     // ── Phase 6: Settings ──
 
     void show_settings() {
-        // Use libadwaita C API directly (no gtkmm wrapper available)
-        auto* prefs = adw_preferences_window_new();
-        gtk_window_set_transient_for(GTK_WINDOW(prefs), GTK_WINDOW(this->gobj()));
-        gtk_window_set_modal(GTK_WINDOW(prefs), TRUE);
+        // Use libadwaita C API directly (AdwPreferencesDialog, replaces deprecated AdwPreferencesWindow)
+        auto* prefs = adw_preferences_dialog_new();
 
         // General page
         auto* page_general = adw_preferences_page_new();
@@ -782,7 +780,7 @@ private:
         adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_general), GTK_WIDGET(row_gitignored));
 
         adw_preferences_page_add(ADW_PREFERENCES_PAGE(page_general), ADW_PREFERENCES_GROUP(group_general));
-        adw_preferences_window_add(ADW_PREFERENCES_WINDOW(prefs), ADW_PREFERENCES_PAGE(page_general));
+        adw_preferences_dialog_add(ADW_PREFERENCES_DIALOG(prefs), ADW_PREFERENCES_PAGE(page_general));
 
         // Appearance page
         auto* page_appearance = adw_preferences_page_new();
@@ -794,12 +792,11 @@ private:
 
         auto* row_compact = adw_switch_row_new();
         adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_compact), "Compact Mode");
-        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_compact), "Compact Mode");
         adw_switch_row_set_active(ADW_SWITCH_ROW(row_compact), FALSE);
         adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_theme), GTK_WIDGET(row_compact));
 
         adw_preferences_page_add(ADW_PREFERENCES_PAGE(page_appearance), ADW_PREFERENCES_GROUP(group_theme));
-        adw_preferences_window_add(ADW_PREFERENCES_WINDOW(prefs), ADW_PREFERENCES_PAGE(page_appearance));
+        adw_preferences_dialog_add(ADW_PREFERENCES_DIALOG(prefs), ADW_PREFERENCES_PAGE(page_appearance));
 
         // Behavior page
         auto* page_behavior = adw_preferences_page_new();
@@ -825,9 +822,9 @@ private:
         adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_behavior), GTK_WIDGET(row_terminal));
 
         adw_preferences_page_add(ADW_PREFERENCES_PAGE(page_behavior), ADW_PREFERENCES_GROUP(group_behavior));
-        adw_preferences_window_add(ADW_PREFERENCES_WINDOW(prefs), ADW_PREFERENCES_PAGE(page_behavior));
+        adw_preferences_dialog_add(ADW_PREFERENCES_DIALOG(prefs), ADW_PREFERENCES_PAGE(page_behavior));
 
-        gtk_window_present(GTK_WINDOW(prefs));
+        adw_dialog_present(ADW_DIALOG(prefs), GTK_WIDGET(this->gobj()));
     }
 };
 
@@ -886,8 +883,6 @@ protected:
             Gdk::Display::get_default(), css,
             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
-        auto settings = Gtk::Settings::get_default();
-        settings->property_gtk_application_prefer_dark_theme() = true;
     }
 
     void on_activate() override {
@@ -914,6 +909,11 @@ protected:
         }
 
         window->present();
+    }
+
+public:
+    static Glib::RefPtr<ExplorerApp> create() {
+        return Glib::make_refptr_for_instance(new ExplorerApp());
     }
 
 private:
