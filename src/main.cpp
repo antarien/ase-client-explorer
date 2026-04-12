@@ -11,6 +11,7 @@
 
 #include <gtkmm.h>
 #include <giomm.h>
+#include <adwaita.h>
 #include <explorer/types.hpp>
 #include <explorer/version.hpp>
 #include <filesystem>
@@ -19,81 +20,13 @@
 #include <string>
 #include <vector>
 #include <set>
+#include <cstdlib>
 
 namespace fs = std::filesystem;
 
 // ── Generated SSOT headers ─────────────────────────────────────────
-
-// Inline the file-icons data directly (constexpr, header-only)
-// Path: sha-web-console/generated/file-icons.hpp (prebuild rsync'd)
-namespace ase::file_icons {
-
-struct FileIcon {
-    const char* pattern;
-    char32_t    glyph;
-    uint32_t    color;      // 0xAARRGGBB
-    bool        exact_name;
-};
-
-// ── Special icons ──
-constexpr FileIcon FOLDER_CLOSED = {"", U'\xF07B', 0xFF9C8C4A, false};
-constexpr FileIcon FOLDER_OPEN   = {"", U'\xF07C', 0xFF9C8C4A, false};
-constexpr FileIcon SUBMODULE     = {"", U'\xF126', 0xFF5A9CB8, false};
-constexpr FileIcon UNKNOWN       = {"", U'\xF016', 0xFF5A5A5A, false};
-
-// ── Extension-based icons ──
-constexpr FileIcon EXT_ICONS[] = {
-    {".cpp",  U'\xE61D', 0xFF5A9CB8, false}, {".cxx",  U'\xE61D', 0xFF5A9CB8, false},
-    {".cc",   U'\xE61D', 0xFF5A9CB8, false}, {".hpp",  U'\xE61D', 0xFF7A5A9C, false},
-    {".hxx",  U'\xE61D', 0xFF7A5A9C, false}, {".h",    U'\xE61E', 0xFF7A5A9C, false},
-    {".c",    U'\xE61E', 0xFF5A9CB8, false}, {".inl",  U'\xE61D', 0xFF7A5A9C, false},
-    {".ts",   U'\xE8CA', 0xFF5A9CB8, false}, {".tsx",  U'\xE7BA', 0xFF5A9CB8, false},
-    {".js",   U'\xE781', 0xFF9C8C4A, false}, {".jsx",  U'\xE7BA', 0xFF9C8C4A, false},
-    {".mjs",  U'\xE781', 0xFF9C8C4A, false}, {".cjs",  U'\xE781', 0xFF9C8C4A, false},
-    {".py",   U'\xE73C', 0xFF4A8C6A, false}, {".rs",   U'\xE7A8', 0xFFB8863A, false},
-    {".go",   U'\xE724', 0xFF5A9CB8, false}, {".java", U'\xE738', 0xFFA84A4A, false},
-    {".kt",   U'\xE81B', 0xFF7A5A9C, false}, {".swift",U'\xE755', 0xFFB8863A, false},
-    {".rb",   U'\xE739', 0xFFA84A4A, false}, {".php",  U'\xE73D', 0xFF7A5A9C, false},
-    {".lua",  U'\xF121', 0xFF5A9CB8, false}, {".html", U'\xF121', 0xFFB8863A, false},
-    {".css",  U'\xF13C', 0xFF5A9CB8, false}, {".scss", U'\xF13C', 0xFF7A5A9C, false},
-    {".json", U'\xF085', 0xFF9C8C4A, false}, {".yaml", U'\xF1DE', 0xFF7A5A9C, false},
-    {".yml",  U'\xF1DE', 0xFF7A5A9C, false}, {".toml", U'\xF085', 0xFFB8863A, false},
-    {".md",   U'\xF15C', 0xFF8A9A9A, false}, {".txt",  U'\xF0F6', 0xFF6A7A7A, false},
-    {".pdf",  U'\xF1C1', 0xFFA84A4A, false}, {".sh",   U'\xE795', 0xFF4A8C6A, false},
-    {".bash", U'\xE795', 0xFF4A8C6A, false}, {".zsh",  U'\xE795', 0xFF4A8C6A, false},
-    {".cmake",U'\xEEFF', 0xFF4A8C6A, false}, {".svg",  U'\xF03E', 0xFF9C8C4A, false},
-    {".png",  U'\xF03E', 0xFF7A5A9C, false}, {".jpg",  U'\xF03E', 0xFF7A5A9C, false},
-    {".glsl", U'\xF0E7', 0xFF9C8C4A, false}, {".vert", U'\xF0E7', 0xFF5A9CB8, false},
-    {".frag", U'\xF0E7', 0xFFB8863A, false}, {".sql",  U'\xF1C0', 0xFF5A9CB8, false},
-    {".env",  U'\xF023', 0xFFA84A4A, false}, {".lock", U'\xF023', 0xFF4A4A4A, false},
-    {".log",  U'\xF0F6', 0xFF4A4A4A, false}, {".wasm", U'\xF1B2', 0xFF7A5A9C, false},
-    {".xml",  U'\xF121', 0xFFB8863A, false}, {".ini",  U'\xF1DE', 0xFF9C8C4A, false},
-    {".csv",  U'\xF0CE', 0xFF4A8C6A, false}, {".zip",  U'\xF1C6', 0xFFB8863A, false},
-    {".tar",  U'\xF1C6', 0xFFB8863A, false}, {".gz",   U'\xF1C6', 0xFFB8863A, false},
-};
-constexpr int EXT_ICONS_COUNT = sizeof(EXT_ICONS) / sizeof(EXT_ICONS[0]);
-
-// ── Exact filename icons ──
-constexpr FileIcon NAME_ICONS[] = {
-    {"CMakeLists.txt",   U'\xEEFF', 0xFF4A8C6A, true},
-    {"Makefile",         U'\xEEFF', 0xFF4A8C6A, true},
-    {"Dockerfile",       U'\xE7B0', 0xFF5A9CB8, true},
-    {"VERSION",          U'\xF02B', 0xFF9C8C4A, true},
-    {"README.md",        U'\xF02D', 0xFF5A9CB8, true},
-    {"CLAUDE.md",        U'\xEE0D', 0xFF7A5A9C, true},
-    {"LICENSE",          U'\xF0A3', 0xFF9C8C4A, true},
-    {"package.json",     U'\xE71E', 0xFFA84A4A, true},
-    {"package-lock.json",U'\xE71E', 0xFF4A4A4A, true},
-    {"tsconfig.json",    U'\xE8CA', 0xFF5A9CB8, true},
-    {"vite.config.ts",   U'\xF0E7', 0xFF9C8C4A, true},
-    {".gitignore",       U'\xF1D3', 0xFFB8863A, true},
-    {".gitmodules",      U'\xF1D3', 0xFFB8863A, true},
-    {"build.sh",         U'\xF135', 0xFF4A8C6A, true},
-    {"PKGBUILD",         U'\xF187', 0xFF5A9CB8, true},
-};
-constexpr int NAME_ICONS_COUNT = sizeof(NAME_ICONS) / sizeof(NAME_ICONS[0]);
-
-}  // namespace ase::file_icons
+// From sha-web-console/generated/ (prebuild pipeline)
+#include "file-icons.hpp"
 
 // ── Icon lookup helper ─────────────────────────────────────────────
 
@@ -175,13 +108,83 @@ std::string icon_markup(const ResolvedIcon& icon) {
 
 // ── Exclude patterns ───────────────────────────────────────────────
 
-const std::set<std::string> EXCLUDED_DIRS = {
-    "build", "cmake-build-debug", ".cache", "node_modules", ".git",
-    ".idea", ".vscode", "__pycache__", ".DS_Store", "cmake-build-release",
+const std::set<std::string> EXCLUDED_NAMES = {
+    "build", "cmake-build-debug", "cmake-build-release", ".cache",
+    "node_modules", ".git", ".idea", ".vscode", "__pycache__",
+    ".DS_Store", "dist", ".tsbuildinfo",
 };
 
 bool should_exclude(const std::string& name) {
-    return EXCLUDED_DIRS.count(name) > 0;
+    if (EXCLUDED_NAMES.count(name) > 0) return true;
+    // Exclude cmake-build-* pattern
+    if (name.size() > 12 && name.substr(0, 12) == "cmake-build-") return true;
+    return false;
+}
+
+// ── VERSION parsing for submodules ─────────────────────────────────
+
+struct SubmoduleInfo {
+    int layer = -1;
+    std::string status;
+    std::string version;
+};
+
+// Parse VERSION file in a submodule directory to extract layer, status, version
+SubmoduleInfo parse_version_file(const std::string& dir_path) {
+    SubmoduleInfo info;
+    auto version_path = fs::path(dir_path) / "VERSION";
+    if (!fs::exists(version_path)) return info;
+
+    std::ifstream file(version_path);
+    std::string line;
+    while (std::getline(file, line)) {
+        // Match: *_LAYER=N
+        if (line.find("_LAYER=") != std::string::npos) {
+            auto eq = line.find('=');
+            if (eq != std::string::npos) {
+                auto val = line.substr(eq + 1);
+                while (!val.empty() && (val.back() == '\r' || val.back() == '\n')) val.pop_back();
+                info.layer = std::atoi(val.c_str());
+            }
+        }
+        // Match: *_STATUS=xxx
+        if (line.find("_STATUS=") != std::string::npos) {
+            auto eq = line.find('=');
+            if (eq != std::string::npos) {
+                info.status = line.substr(eq + 1);
+                while (!info.status.empty() && (info.status.back() == '\r' || info.status.back() == '\n'))
+                    info.status.pop_back();
+            }
+        }
+        // Match first line: MODULE_NAME=00.05.23.00273 (version number)
+        if (line.find('=') != std::string::npos && line.find("_NAME") == std::string::npos
+            && line.find("_DESC") == std::string::npos && line.find("_LAYER") == std::string::npos
+            && line.find("_STATUS") == std::string::npos && line.find("_CREATED") == std::string::npos
+            && line.find("_UPDATED") == std::string::npos && info.version.empty()) {
+            auto eq = line.find('=');
+            auto val = line.substr(eq + 1);
+            while (!val.empty() && (val.back() == '\r' || val.back() == '\n')) val.pop_back();
+            // Check if it looks like a version (starts with digit)
+            if (!val.empty() && std::isdigit(static_cast<unsigned char>(val[0]))) {
+                info.version = val;
+            }
+        }
+    }
+    return info;
+}
+
+// Status → color (for the status dot in the tree)
+uint32_t status_color(const std::string& status) {
+    if (status == "stub")   return 0xFF4A4A4A;  // grey
+    if (status == "poc")    return 0xFF9C8C4A;  // yellow
+    if (status == "init")   return 0xFFB8863A;  // orange
+    if (status == "core")   return 0xFF5A9CB8;  // blue
+    if (status == "feat")   return 0xFF5A9CB8;  // cyan-ish
+    if (status == "refine") return 0xFF4A8C6A;  // green
+    if (status == "alpha")  return 0xFF7A5A9C;  // purple
+    if (status == "beta")   return 0xFF7A5A9C;  // purple
+    if (status == "stable") return 0xFF6A9A5A;  // bright green
+    return 0xFF5A5A5A;                          // unknown
 }
 
 }  // anonymous namespace
@@ -194,6 +197,9 @@ public:
     std::string full_path;
     bool is_directory = false;
     bool is_submodule = false;
+    int layer = -1;              // L0..L5, -1 = not a submodule
+    std::string version_status;  // stub, poc, init, core, feat, refine, alpha, beta, stable
+    std::string version_string;  // e.g. "00.05.23.00273"
 
     static Glib::RefPtr<FileEntry> create(const std::string& name_, const std::string& path_,
                                            bool is_dir, bool is_sub) {
@@ -223,6 +229,8 @@ public:
         m_root_path = path;
         parse_submodules();
         populate_root();
+        setup_file_monitor();
+        update_breadcrumb(path);
         set_title("ASE Explorer \u2014 " + fs::path(path).filename().string());
     }
 
@@ -233,6 +241,13 @@ private:
     Gtk::ListView m_list_view;
     Glib::RefPtr<Gtk::TreeListModel> m_tree_model;
     Glib::RefPtr<Gtk::SingleSelection> m_selection;
+
+    // Phase 5: Live features
+    Glib::RefPtr<Gio::FileMonitor> m_file_monitor;
+    sigc::connection m_debounce_connection;
+    Gtk::SearchEntry* m_search_entry = nullptr;
+    Gtk::Box* m_breadcrumb_box = nullptr;
+    bool m_search_visible = false;
 
     // ── UI setup ──
 
@@ -245,24 +260,57 @@ private:
         title_label->add_css_class("title");
         header->set_title_widget(*title_label);
 
-        // Search button (placeholder for Phase 5)
+        // Search entry (hidden by default, toggled with Ctrl+F)
+        m_search_entry = Gtk::make_managed<Gtk::SearchEntry>();
+        m_search_entry->set_placeholder_text("Filter files...");
+        m_search_entry->set_visible(false);
+        m_search_entry->signal_search_changed().connect([this]() {
+            on_search_changed();
+        });
+        m_search_entry->signal_stop_search().connect([this]() {
+            toggle_search(false);
+        });
+        header->pack_start(*m_search_entry);
+
+        // Search toggle button
         auto btn_search = Gtk::make_managed<Gtk::Button>();
         btn_search->set_icon_name("system-search-symbolic");
         btn_search->set_tooltip_text("Search (Ctrl+F)");
+        btn_search->signal_clicked().connect([this]() { toggle_search(!m_search_visible); });
         header->pack_end(*btn_search);
 
-        // Settings button (placeholder for Phase 6)
+        // Settings button
         auto btn_settings = Gtk::make_managed<Gtk::Button>();
         btn_settings->set_icon_name("emblem-system-symbolic");
         btn_settings->set_tooltip_text("Settings (Ctrl+,)");
+        btn_settings->signal_clicked().connect([this]() { show_settings(); });
         header->pack_end(*btn_settings);
 
-        // Main content: ScrolledWindow with ListView
+        // Refresh button
+        auto btn_refresh = Gtk::make_managed<Gtk::Button>();
+        btn_refresh->set_icon_name("view-refresh-symbolic");
+        btn_refresh->set_tooltip_text("Refresh (F5)");
+        btn_refresh->signal_clicked().connect([this]() { refresh_tree(); });
+        header->pack_end(*btn_refresh);
+
+        // Main vertical box: breadcrumb + scrolled tree
+        auto vbox = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::VERTICAL, 0);
+        set_child(*vbox);
+
+        // Breadcrumb path bar
+        m_breadcrumb_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 2);
+        m_breadcrumb_box->set_margin_start(8);
+        m_breadcrumb_box->set_margin_end(8);
+        m_breadcrumb_box->set_margin_top(2);
+        m_breadcrumb_box->set_margin_bottom(2);
+        vbox->append(*m_breadcrumb_box);
+
+        // ScrolledWindow with ListView
         auto scrolled = Gtk::make_managed<Gtk::ScrolledWindow>();
         scrolled->set_policy(Gtk::PolicyType::AUTOMATIC, Gtk::PolicyType::AUTOMATIC);
         scrolled->set_vexpand(true);
         scrolled->set_hexpand(true);
-        set_child(*scrolled);
+        vbox->append(*scrolled);
 
         // ListView setup (will be populated when root is loaded)
         m_list_view.set_vexpand(true);
@@ -285,18 +333,30 @@ private:
         });
         m_list_view.add_controller(right_click);
 
-        // DnD source
+        // DnD source — provides both text/uri-list and text/plain
         auto drag_source = Gtk::DragSource::create();
         drag_source->set_actions(Gdk::DragAction::COPY);
         drag_source->signal_prepare().connect(
             [this](double, double) -> Glib::RefPtr<Gdk::ContentProvider> {
                 auto entry = get_selected_entry();
                 if (!entry) return {};
-                auto uri = "file://" + entry->full_path;
-                auto value = Glib::Value<Glib::ustring>();
-                value.init(value.value_type());
-                value.set(uri);
-                return Gdk::ContentProvider::create(value);
+
+                // text/uri-list format (standard DnD protocol for file managers)
+                auto file = Gio::File::create_for_path(entry->full_path);
+                auto uri_value = Glib::Value<Glib::ustring>();
+                uri_value.init(uri_value.value_type());
+                uri_value.set(file->get_uri() + "\r\n");
+
+                // text/plain format (for terminals, chat apps, etc.)
+                auto text_value = Glib::Value<Glib::ustring>();
+                text_value.init(text_value.value_type());
+                text_value.set(entry->full_path);
+
+                // Combine both providers
+                std::vector<Glib::RefPtr<Gdk::ContentProvider>> providers;
+                providers.push_back(Gdk::ContentProvider::create(uri_value));
+                providers.push_back(Gdk::ContentProvider::create(text_value));
+                return Gdk::ContentProvider::create(providers);
             }, false);
         m_list_view.add_controller(drag_source);
 
@@ -313,6 +373,22 @@ private:
                     copy_path_to_clipboard(
                         (state & Gdk::ModifierType::SHIFT_MASK) != Gdk::ModifierType());
                     return true;
+                }
+                if (ctrl && keyval == GDK_KEY_f) {
+                    toggle_search(!m_search_visible);
+                    return true;
+                }
+                if (ctrl && keyval == GDK_KEY_comma) {
+                    show_settings();
+                    return true;
+                }
+                if (keyval == GDK_KEY_F5) {
+                    refresh_tree();
+                    return true;
+                }
+                if (keyval == GDK_KEY_Escape) {
+                    if (m_search_visible) { toggle_search(false); return true; }
+                    return false;
                 }
                 return false;
             }, false);
@@ -362,7 +438,7 @@ private:
 
         for (const auto& e : fs::directory_iterator(dir_path, fs::directory_options::skip_permission_denied)) {
             auto name = e.path().filename().string();
-            if (name.empty() || name[0] == '.') continue;
+            if (name.empty()) continue;
             if (should_exclude(name)) continue;
 
             bool is_dir = e.is_directory();
@@ -380,7 +456,15 @@ private:
         });
 
         for (const auto& e : entries) {
-            store->append(FileEntry::create(e.name, e.path, e.is_dir, e.is_sub));
+            auto fe = FileEntry::create(e.name, e.path, e.is_dir, e.is_sub);
+            // Parse VERSION for submodules to get layer + status
+            if (e.is_sub) {
+                auto info = parse_version_file(e.path);
+                fe->layer = info.layer;
+                fe->version_status = info.status;
+                fe->version_string = info.version;
+            }
+            store->append(fe);
         }
 
         return store;
@@ -411,9 +495,15 @@ private:
             name_label->set_ellipsize(Pango::EllipsizeMode::END);
             name_label->set_hexpand(true);
 
+            // badge_label shows [L3 core] for submodules
+            auto badge_label = Gtk::make_managed<Gtk::Label>();
+            badge_label->set_use_markup(true);
+            badge_label->set_xalign(1.0f);
+
             auto inner_box = Gtk::make_managed<Gtk::Box>(Gtk::Orientation::HORIZONTAL, 4);
             inner_box->append(*icon_label);
             inner_box->append(*name_label);
+            inner_box->append(*badge_label);
 
             expander->set_child(*inner_box);
             box->append(*expander);
@@ -429,6 +519,7 @@ private:
             if (!inner_box) return;
             auto icon_label = dynamic_cast<Gtk::Label*>(inner_box->get_first_child());
             auto name_label = dynamic_cast<Gtk::Label*>(icon_label ? icon_label->get_next_sibling() : nullptr);
+            auto badge_label = dynamic_cast<Gtk::Label*>(name_label ? name_label->get_next_sibling() : nullptr);
             if (!icon_label || !name_label) return;
 
             auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(item->get_item());
@@ -448,6 +539,29 @@ private:
                 ri = get_file_icon(entry->name);
             }
             icon_label->set_markup(icon_markup(ri));
+
+            // Badge for submodules: [L3 core] with status-colored dot
+            if (badge_label) {
+                if (entry->is_submodule && !entry->version_status.empty()) {
+                    uint32_t sc = status_color(entry->version_status);
+                    char hex[8];
+                    std::snprintf(hex, sizeof(hex), "#%02X%02X%02X",
+                        (sc >> 16) & 0xFF, (sc >> 8) & 0xFF, sc & 0xFF);
+                    std::string badge = "<span font='8' foreground='" + std::string(hex) + "'>\u25CF</span>"
+                        " <span font='Fira Code 8' foreground='#5A5A5A'>[";
+                    if (entry->layer >= 0) badge += "L" + std::to_string(entry->layer) + " ";
+                    badge += entry->version_status + "]</span>";
+                    badge_label->set_markup(badge);
+                    // Tooltip: full version info
+                    if (!entry->version_string.empty()) {
+                        badge_label->set_tooltip_text(
+                            entry->name + " v" + entry->version_string + " [" + entry->version_status + "]");
+                    }
+                } else {
+                    badge_label->set_markup("");
+                    badge_label->set_tooltip_text("");
+                }
+            }
         });
 
         m_list_view.set_model(m_selection);
@@ -492,13 +606,20 @@ private:
 
         auto menu = Gio::Menu::create();
         menu->append("Open", "explorer.open");
+        menu->append("Open With...", "explorer.open-with");
         menu->append("Copy Path", "explorer.copy-path");
         menu->append("Copy Relative Path", "explorer.copy-rel-path");
         menu->append("Open in Terminal", "explorer.open-terminal");
+        menu->append("Reveal in File Manager", "explorer.reveal");
 
         // Actions
         auto group = Gio::SimpleActionGroup::create();
         group->add_action("open", [this]() { on_double_click(); });
+        group->add_action("open-with", [this, entry]() {
+            auto file = Gio::File::create_for_path(entry->full_path);
+            auto launcher = Gtk::FileLauncher::create(file);
+            launcher->open_containing_folder(dynamic_cast<Gtk::Window&>(*this), nullptr);
+        });
         group->add_action("copy-path", [this]() { copy_path_to_clipboard(false); });
         group->add_action("copy-rel-path", [this]() { copy_path_to_clipboard(true); });
         group->add_action("open-terminal", [this, entry]() {
@@ -506,6 +627,13 @@ private:
                                            : fs::path(entry->full_path).parent_path().string();
             auto cmd = "foot --working-directory=" + dir;
             Glib::spawn_command_line_async(cmd);
+        });
+        group->add_action("reveal", [this, entry]() {
+            auto dir = entry->is_directory ? entry->full_path
+                                           : fs::path(entry->full_path).parent_path().string();
+            auto file = Gio::File::create_for_path(dir);
+            auto launcher = Gtk::FileLauncher::create(file);
+            launcher->launch(dynamic_cast<Gtk::Window&>(*this), nullptr);
         });
         m_list_view.insert_action_group("explorer", group);
 
@@ -526,6 +654,181 @@ private:
 
         get_clipboard()->set_text(path);
     }
+
+    // ── Phase 5: Live Features ──
+
+    void setup_file_monitor() {
+        auto root_file = Gio::File::create_for_path(m_root_path);
+        m_file_monitor = root_file->monitor_directory(Gio::FileMonitor::Flags::WATCH_MOVES);
+        m_file_monitor->signal_changed().connect(
+            [this](const Glib::RefPtr<Gio::File>&, const Glib::RefPtr<Gio::File>&,
+                   Gio::FileMonitor::Event) {
+                // Debounce: wait 500ms before refreshing to batch rapid changes
+                if (m_debounce_connection.connected()) m_debounce_connection.disconnect();
+                m_debounce_connection = Glib::signal_timeout().connect([this]() {
+                    refresh_tree();
+                    return false;  // one-shot
+                }, 500);
+            });
+    }
+
+    void refresh_tree() {
+        if (m_root_path.empty()) return;
+        parse_submodules();
+        populate_root();
+    }
+
+    void toggle_search(bool visible) {
+        m_search_visible = visible;
+        m_search_entry->set_visible(visible);
+        if (visible) {
+            m_search_entry->grab_focus();
+        } else {
+            m_search_entry->set_text("");
+        }
+    }
+
+    void on_search_changed() {
+        auto text = m_search_entry->get_text();
+        if (text.empty()) {
+            // Reset: reload full tree
+            refresh_tree();
+            return;
+        }
+
+        // Filter: rebuild tree showing only matching entries
+        // For now, a simple approach: rebuild with filter text
+        // Full fuzzy-match would require a custom Gtk::Filter on the model
+        auto filter_text = text.lowercase();
+        (void)filter_text;
+        // TODO(Phase 5.2): implement Gtk::CustomFilter on TreeListModel
+        // For now the search entry is wired up but filtering is deferred
+        // until the base tree renders correctly after build verification
+    }
+
+    void update_breadcrumb(const std::string& path) {
+        if (!m_breadcrumb_box) return;
+
+        // Clear existing breadcrumbs
+        while (auto child = m_breadcrumb_box->get_first_child()) {
+            m_breadcrumb_box->remove(*child);
+        }
+
+        // Build path components
+        auto rel = fs::relative(path, "/mnt/code/SRC/GITHUB");
+        auto components = std::vector<std::pair<std::string, std::string>>();
+        auto current = fs::path(path);
+        auto base = fs::path("/mnt/code/SRC/GITHUB");
+
+        // Collect components from root to current
+        for (auto it = rel.begin(); it != rel.end(); ++it) {
+            base = base / *it;
+            components.push_back({it->string(), base.string()});
+        }
+
+        for (size_t i = 0; i < components.size(); ++i) {
+            if (i > 0) {
+                auto sep = Gtk::make_managed<Gtk::Label>("/");
+                sep->add_css_class("dim-label");
+                m_breadcrumb_box->append(*sep);
+            }
+
+            auto btn = Gtk::make_managed<Gtk::Button>(components[i].first);
+            btn->add_css_class("flat");
+            btn->add_css_class("dim-label");
+            auto target_path = components[i].second;
+            btn->signal_clicked().connect([this, target_path]() {
+                load_root(target_path);
+            });
+            m_breadcrumb_box->append(*btn);
+        }
+
+        // Copy button at the end
+        auto copy_btn = Gtk::make_managed<Gtk::Button>();
+        copy_btn->set_icon_name("edit-copy-symbolic");
+        copy_btn->set_tooltip_text("Copy path");
+        copy_btn->add_css_class("flat");
+        auto p = path;
+        copy_btn->signal_clicked().connect([this, p]() {
+            get_clipboard()->set_text(p);
+        });
+        m_breadcrumb_box->append(*copy_btn);
+    }
+
+    // ── Phase 6: Settings ──
+
+    void show_settings() {
+        // Use libadwaita C API directly (no gtkmm wrapper available)
+        auto* prefs = adw_preferences_window_new();
+        gtk_window_set_transient_for(GTK_WINDOW(prefs), GTK_WINDOW(this->gobj()));
+        gtk_window_set_modal(GTK_WINDOW(prefs), TRUE);
+
+        // General page
+        auto* page_general = adw_preferences_page_new();
+        adw_preferences_page_set_title(ADW_PREFERENCES_PAGE(page_general), "General");
+        adw_preferences_page_set_icon_name(ADW_PREFERENCES_PAGE(page_general), "preferences-system-symbolic");
+
+        auto* group_general = adw_preferences_group_new();
+        adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group_general), "File Display");
+
+        auto* row_hidden = adw_switch_row_new();
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_hidden), "Show Hidden Files");
+        adw_switch_row_set_active(ADW_SWITCH_ROW(row_hidden), FALSE);
+        adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_general), GTK_WIDGET(row_hidden));
+
+        auto* row_gitignored = adw_switch_row_new();
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_gitignored), "Show .gitignore'd Files");
+        adw_switch_row_set_active(ADW_SWITCH_ROW(row_gitignored), FALSE);
+        adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_general), GTK_WIDGET(row_gitignored));
+
+        adw_preferences_page_add(ADW_PREFERENCES_PAGE(page_general), ADW_PREFERENCES_GROUP(group_general));
+        adw_preferences_window_add(ADW_PREFERENCES_WINDOW(prefs), ADW_PREFERENCES_PAGE(page_general));
+
+        // Appearance page
+        auto* page_appearance = adw_preferences_page_new();
+        adw_preferences_page_set_title(ADW_PREFERENCES_PAGE(page_appearance), "Appearance");
+        adw_preferences_page_set_icon_name(ADW_PREFERENCES_PAGE(page_appearance), "applications-graphics-symbolic");
+
+        auto* group_theme = adw_preferences_group_new();
+        adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group_theme), "Theme");
+
+        auto* row_compact = adw_switch_row_new();
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_compact), "Compact Mode");
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_compact), "Compact Mode");
+        adw_switch_row_set_active(ADW_SWITCH_ROW(row_compact), FALSE);
+        adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_theme), GTK_WIDGET(row_compact));
+
+        adw_preferences_page_add(ADW_PREFERENCES_PAGE(page_appearance), ADW_PREFERENCES_GROUP(group_theme));
+        adw_preferences_window_add(ADW_PREFERENCES_WINDOW(prefs), ADW_PREFERENCES_PAGE(page_appearance));
+
+        // Behavior page
+        auto* page_behavior = adw_preferences_page_new();
+        adw_preferences_page_set_title(ADW_PREFERENCES_PAGE(page_behavior), "Behavior");
+        adw_preferences_page_set_icon_name(ADW_PREFERENCES_PAGE(page_behavior), "preferences-other-symbolic");
+
+        auto* group_behavior = adw_preferences_group_new();
+        adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group_behavior), "Interaction");
+
+        auto* row_singleclick = adw_switch_row_new();
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_singleclick), "Single-Click Open");
+        adw_switch_row_set_active(ADW_SWITCH_ROW(row_singleclick), FALSE);
+        adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_behavior), GTK_WIDGET(row_singleclick));
+
+        auto* row_filewatch = adw_switch_row_new();
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_filewatch), "Live File Watching");
+        adw_switch_row_set_active(ADW_SWITCH_ROW(row_filewatch), TRUE);
+        adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_behavior), GTK_WIDGET(row_filewatch));
+
+        auto* row_terminal = adw_entry_row_new();
+        adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row_terminal), "Terminal Emulator");
+        gtk_editable_set_text(GTK_EDITABLE(row_terminal), "foot");
+        adw_preferences_group_add(ADW_PREFERENCES_GROUP(group_behavior), GTK_WIDGET(row_terminal));
+
+        adw_preferences_page_add(ADW_PREFERENCES_PAGE(page_behavior), ADW_PREFERENCES_GROUP(group_behavior));
+        adw_preferences_window_add(ADW_PREFERENCES_WINDOW(prefs), ADW_PREFERENCES_PAGE(page_behavior));
+
+        gtk_window_present(GTK_WINDOW(prefs));
+    }
 };
 
 // ── ExplorerApp ────────────────────────────────────────────────────
@@ -539,6 +842,11 @@ public:
 protected:
     void on_startup() override {
         Gtk::Application::on_startup();
+        adw_init();
+
+        // Force dark color scheme via libadwaita
+        adw_style_manager_set_color_scheme(
+            adw_style_manager_get_default(), ADW_COLOR_SCHEME_FORCE_DARK);
 
         // Dark theme CSS
         auto css = Gtk::CssProvider::create();

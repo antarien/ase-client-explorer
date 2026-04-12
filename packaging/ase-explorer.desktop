@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ASE Project Explorer
+Comment=Hierarchical project explorer with NerdFont icons and drag-drop
+Exec=ase-explorer %F
+Icon=ase-explorer
+Terminal=false
+MimeType=inode/directory;
+Categories=FileManager;Development;Utility;
+Keywords=explorer;project;tree;files;

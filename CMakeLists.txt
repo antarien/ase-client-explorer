@@ -49,6 +49,7 @@ message(STATUS "Configuring ${PROJECT_NAME} v${PROJECT_VERSION}")
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTKMM REQUIRED IMPORTED_TARGET gtkmm-4.0)
+pkg_check_modules(LIBADW REQUIRED IMPORTED_TARGET libadwaita-1)
 
 # ── Desktop Executable ───────────────────────────────────────────────
 
@@ -60,11 +61,13 @@ target_include_directories(ase-explorer
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_BINARY_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../sha-client-web/sha-web-console/generated
 )
 
 target_link_libraries(ase-explorer
     PRIVATE
         PkgConfig::GTKMM
+        PkgConfig::LIBADW
 )
 
 set_target_properties(ase-explorer PROPERTIES
