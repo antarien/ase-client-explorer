@@ -55,7 +55,7 @@ struct GuideState {
 
 // Width of one depth column in pixels. Must be in sync with the render loop
 // and the DrawingArea size_request in bind().
-constexpr int GUIDE_COL_WIDTH = 32;
+constexpr int GUIDE_COL_WIDTH = 20;
 
 // X offset within a depth column where the pipe is rendered. The
 // Gtk::TreeExpander draws its expand arrow not at the far left of its
