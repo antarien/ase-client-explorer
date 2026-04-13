@@ -73,6 +73,26 @@ void ExplorerWindow::build_ui() {
     btn_search.on_clicked([this]() { handle_search_toggle(); });
     header.pack_end(btn_search);
 
+    // Expand-toggle: recursively expand or collapse the selected row.
+    auto btn_expand = ase::gtk::Button::create_from_icon("pan-down-symbolic");
+    btn_expand.set_tooltip_text("Expand / collapse selected item");
+    btn_expand.on_clicked([this]() {
+        m_tree_view.toggle_recursive_expand_selected();
+    });
+    header.pack_end(btn_expand);
+
+    // Copy the current root path (what the breadcrumb is showing) to the
+    // clipboard. Anchored to the tree list view so the clipboard helper
+    // picks up the correct display.
+    auto btn_copy = ase::gtk::Button::create_from_icon("edit-copy-symbolic");
+    btn_copy.set_tooltip_text("Copy current path");
+    btn_copy.on_clicked([this]() {
+        if (!m_root_path.empty()) {
+            ase::gtk::copy_to_clipboard(m_tree_view.list_view(), m_root_path);
+        }
+    });
+    header.pack_end(btn_copy);
+
     m_window.set_titlebar(header);
 
     // ── Main vertical layout: breadcrumb + scrolled tree view ──
@@ -99,11 +119,6 @@ void ExplorerWindow::build_ui() {
     // ── Breadcrumb segment click → navigate ──
     m_breadcrumb.on_segment_clicked([this](const std::string& path) {
         load_root(path);
-    });
-
-    // ── Breadcrumb expand-toggle → recurse-expand/collapse selection ──
-    m_breadcrumb.on_expand_toggle([this]() {
-        m_tree_view.toggle_recursive_expand_selected();
     });
 
     // ── Double-click gesture for file open / folder toggle ──

@@ -38,20 +38,12 @@ public:
             [cb = std::forward<Callback>(callback)](const std::string& path) { cb(path); });
     }
 
-    /** Install the expand-toggle handler: void() - recursively (un)folds selection. */
-    template <typename Callback>
-    void on_expand_toggle(Callback&& callback) {
-        m_on_expand_toggle = sigc::slot<void()>(
-            [cb = std::forward<Callback>(callback)]() { cb(); });
-    }
-
     /** Rebuild the bar for a new absolute path. */
     void update(const std::string& absolute_path);
 
 private:
     ase::gtk::Box m_box;
     sigc::slot<void(const std::string&)> m_on_segment_clicked;
-    sigc::slot<void()> m_on_expand_toggle;
 };
 
 }  // namespace ase::explorer

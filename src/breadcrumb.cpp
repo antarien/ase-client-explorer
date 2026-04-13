@@ -89,30 +89,9 @@ void Breadcrumb::update(const std::string& absolute_path) {
         m_box.append(btn);
     }
 
-    // Trailing copy button: copies the full absolute path to the clipboard.
-    auto copy_btn = ase::gtk::Button::create_from_icon("edit-copy-symbolic");
-    copy_btn.set_tooltip_text("Copy path");
-    copy_btn.add_css_class("flat");
-    auto box_widget_ref = &m_box;
-    auto path_copy = absolute_path;
-    copy_btn.on_clicked([box_widget_ref, path_copy]() {
-        ase::gtk::copy_to_clipboard(*box_widget_ref, path_copy);
-    });
-    m_box.append(copy_btn);
-
-    // Trailing expand-toggle button: recursively expand or collapse the
-    // currently-selected tree row so the user can unfold an entire subtree
-    // with one click (and fold it again with the next click). pan-down is
-    // the same chevron glyph Gtk::TreeExpander uses for its own row arrow,
-    // so users immediately recognise this as a tree-expansion action.
-    auto expand_btn = ase::gtk::Button::create_from_icon("pan-down-symbolic");
-    expand_btn.set_tooltip_text("Expand / collapse selected item");
-    expand_btn.add_css_class("flat");
-    auto slot = m_on_expand_toggle;
-    expand_btn.on_clicked([slot]() {
-        if (slot) slot();
-    });
-    m_box.append(expand_btn);
+    // Copy/expand actions used to live here as trailing buttons but were
+    // moved to the header bar so the breadcrumb row stays a pure path
+    // indicator and saves vertical space.
 }
 
 }  // namespace ase::explorer
