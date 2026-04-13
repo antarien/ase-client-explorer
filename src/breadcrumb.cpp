@@ -72,10 +72,13 @@ std::vector<Segment> split_segments(const std::string& absolute_path) {
 }  // namespace
 
 Breadcrumb::Breadcrumb() : m_box(ase::gtk::Box::horizontal(2)) {
+    // Horizontal and vertical outer margins are kept equal (8px) so the
+    // breadcrumb row has symmetric breathing room and the distance to the
+    // header bar above matches the distance to the window edge on the left.
     m_box.set_margin_start(8);
     m_box.set_margin_end(8);
-    m_box.set_margin_top(2);
-    m_box.set_margin_bottom(2);
+    m_box.set_margin_top(8);
+    m_box.set_margin_bottom(8);
 }
 
 void Breadcrumb::update(const std::string& absolute_path) {

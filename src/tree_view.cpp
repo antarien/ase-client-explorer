@@ -305,14 +305,17 @@ void TreeView::populate(const std::string& root_path) {
         });
 
     m_tree_model = std::make_unique<ase::gtk::TreeListModel>(tree);
-    m_selection = std::make_unique<ase::gtk::SingleSelection>(
-        ase::gtk::SingleSelection::create(*m_tree_model));
-    m_selection->set_autoselect(false);
+    // MultiSelection gives us Shift-click range selection and Ctrl-click
+    // toggle for free. ListView::set_model on the adapter wrapper only
+    // accepts SingleSelection so we reach through native() and install the
+    // raw selection model ourselves.
+    m_selection = Gtk::MultiSelection::create(m_tree_model->native());
+    m_list_view->native()->set_model(m_selection);
 
     // Forward selection-change events to the installed callback so the
     // window can update the breadcrumb bar live as the user clicks around
     // in the tree.
-    m_selection->native()->signal_selection_changed().connect(
+    m_selection->signal_selection_changed().connect(
         [this](guint, guint) {
             if (m_on_selection_changed) {
                 m_on_selection_changed(selected_path());
@@ -452,13 +455,33 @@ void TreeView::populate(const std::string& root_path) {
     });
 
     m_factory = std::make_unique<ase::gtk::ListItemFactory>(factory);
-    m_list_view->set_model(*m_selection);
+    // set_model was already installed via native() right after creating the
+    // MultiSelection above; we only need to attach the factory here.
     m_list_view->set_factory(*m_factory);
 }
 
+namespace {
+
+// Return the first position (in model order) that is selected in `sel`, or
+// GTK_INVALID_LIST_POSITION if nothing is selected. O(n) over the visible
+// tree - fast enough for interactive use even on large trees.
+guint first_selected_position(const Glib::RefPtr<Gtk::MultiSelection>& sel) {
+    if (!sel) return GTK_INVALID_LIST_POSITION;
+    const guint n = sel->get_n_items();
+    for (guint p = 0; p < n; ++p) {
+        if (sel->is_selected(p)) return p;
+    }
+    return GTK_INVALID_LIST_POSITION;
+}
+
+}  // namespace
+
 ase::gtk::FileInfo TreeView::selected_file_info() const {
-    if (!m_selection) return ase::gtk::FileInfo(Glib::RefPtr<Gio::FileInfo>{});
-    auto sel_obj = m_selection->get_selected_item_native();
+    const guint pos = first_selected_position(m_selection);
+    if (pos == GTK_INVALID_LIST_POSITION) {
+        return ase::gtk::FileInfo(Glib::RefPtr<Gio::FileInfo>{});
+    }
+    auto sel_obj = m_selection->get_object(pos);
     auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(sel_obj);
     if (!row) return ase::gtk::FileInfo(Glib::RefPtr<Gio::FileInfo>{});
     ase::gtk::TreeListRow tree_row(row);
@@ -471,9 +494,26 @@ std::string TreeView::selected_path() const {
     return info.get_full_path();
 }
 
+std::vector<std::string> TreeView::selected_paths() const {
+    std::vector<std::string> result;
+    if (!m_selection) return result;
+    const guint n = m_selection->get_n_items();
+    for (guint pos = 0; pos < n; ++pos) {
+        if (!m_selection->is_selected(pos)) continue;
+        auto obj = m_selection->get_object(pos);
+        auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(obj);
+        if (!row) continue;
+        ase::gtk::TreeListRow tree_row(row);
+        auto full = tree_row.get_file_info().get_full_path();
+        if (!full.empty()) result.push_back(std::move(full));
+    }
+    return result;
+}
+
 void TreeView::activate_selection() {
-    if (!m_selection) return;
-    auto sel_obj = m_selection->get_selected_item_native();
+    const guint pos = first_selected_position(m_selection);
+    if (pos == GTK_INVALID_LIST_POSITION) return;
+    auto sel_obj = m_selection->get_object(pos);
     auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(sel_obj);
     if (!row) return;
     ase::gtk::TreeListRow tree_row(row);
@@ -511,7 +551,10 @@ bool TreeView::navigate_to(const std::string& target_path) {
         const std::string row_path = info.get_full_path();
 
         if (row_path == target_path) {
-            m_selection->set_selected(pos);
+            // Replace the selection with just this row (second arg "true" =
+            // unselect everything else). The navigate-to flow is a jump,
+            // not an extension of the user's multi-selection.
+            m_selection->select_item(pos, true);
             if (info.is_directory() && !row->get_expanded()) {
                 row->set_expanded(true);
             }
@@ -545,7 +588,11 @@ bool TreeView::navigate_to(const std::string& target_path) {
 bool TreeView::toggle_recursive_expand_selected() {
     if (!m_selection || !m_tree_model) return false;
 
-    const unsigned int selected_pos = m_selection->get_selected();
+    // Multi-selection: recursive expand operates on the FIRST selected row
+    // (the "anchor"). Users who want to expand many subtrees at once can
+    // click each root separately; applying it to every selected row would
+    // be surprising and potentially slow.
+    const guint selected_pos = first_selected_position(m_selection);
     if (selected_pos == GTK_INVALID_LIST_POSITION) return false;
 
     auto root_row = m_tree_model->native()->get_row(selected_pos);

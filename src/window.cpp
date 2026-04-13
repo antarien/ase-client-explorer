@@ -171,33 +171,34 @@ void ExplorerWindow::build_ui() {
     m_context_menu.on_reveal       ([this]() { handle_right_click_reveal(); });
     m_context_menu.build(m_tree_view.list_view());
 
-    // ── Drag source (drag selected path into external apps) ──
+    // ── Drag source (drag selected paths into external apps) ──
     //
-    // GTK4-native file DnD via GdkFileList + text/plain fallback.
+    // Multi-selection aware: every currently-selected row contributes one
+    // GFile to the GdkFileList, and the text/plain fallback is a single
+    // space-separated string of all absolute paths. File managers drop
+    // every selected item as separate files; terminals and chat apps get
+    // one text payload that can be pasted as a single shell argv line.
     //
-    // File managers (Nautilus, Dolphin, Thunar, Nemo), terminals (foot,
-    // kitty, alacritty), editors (gedit, Builder) and browsers all unwrap
-    // GdkFileList natively - no URI encoding, no CRLF terminators, no
+    // GTK4-native file DnD via GdkFileList avoids text/uri-list CRLF
     // control-code false positives in terminal sanitiser checks.
-    //
-    // The text/plain provider is added second as a fallback for apps that
-    // only understand plain strings (chat clients, form fields). Both carry
-    // the same absolute filesystem path so every drop target sees the same
-    // bytes.
-    //
-    // The signal handler reads the current selection at drag-start time via
-    // m_tree_view.selected_path() so the drop always carries the row the
-    // user actually grabbed.
     auto drag_source = ase::gtk::DragSource::create();
     drag_source.set_actions(ase::gtk::DragAction::Copy);
     drag_source.native()->signal_prepare().connect(
         [this](double, double) -> Glib::RefPtr<Gdk::ContentProvider> {
-            const std::string path = m_tree_view.selected_path();
-            if (path.empty()) return {};
+            const std::vector<std::string> paths = m_tree_view.selected_paths();
+            if (paths.empty()) return {};
 
-            // GdkFileList: GTK4's native file-transfer payload.
-            auto gfile = Gio::File::create_for_path(path);
-            GSList* slist = g_slist_prepend(nullptr, gfile->gobj());
+            // Build the GdkFileList: every selected absolute path becomes
+            // a GFile in the list. Prepend in reverse order so the final
+            // GSList order matches the selection order.
+            std::vector<Glib::RefPtr<Gio::File>> file_refs;  // keep refs alive
+            file_refs.reserve(paths.size());
+            GSList* slist = nullptr;
+            for (auto it = paths.rbegin(); it != paths.rend(); ++it) {
+                auto gfile = Gio::File::create_for_path(*it);
+                file_refs.push_back(gfile);
+                slist = g_slist_prepend(slist, gfile->gobj());
+            }
             GdkFileList* file_list = gdk_file_list_new_from_list(slist);
             g_slist_free(slist);
 
@@ -208,12 +209,18 @@ void ExplorerWindow::build_ui() {
             g_value_unset(&file_gvalue);
             auto file_provider = Glib::wrap(file_cp);
 
-            // text/plain fallback: raw absolute path for apps that only
-            // understand plain strings. Contains no control characters so
-            // terminal sanitisers accept it silently.
+            // text/plain: all selected paths joined by a single space so a
+            // terminal or chat app can paste them as one argv line. Each
+            // path is passed through verbatim - callers that need shell
+            // quoting can post-process.
+            std::string joined;
+            for (size_t i = 0; i < paths.size(); ++i) {
+                if (i > 0) joined += ' ';
+                joined += paths[i];
+            }
             auto text_value = Glib::Value<Glib::ustring>();
             text_value.init(text_value.value_type());
-            text_value.set(path);
+            text_value.set(joined);
             auto text_provider = Gdk::ContentProvider::create(text_value);
 
             std::vector<Glib::RefPtr<Gdk::ContentProvider>> providers;

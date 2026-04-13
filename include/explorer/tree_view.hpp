@@ -22,6 +22,9 @@
 #include <ase/gtk/list_view.hpp>
 #include <ase/gtk/tree.hpp>
 
+#include <gtkmm/multiselection.h>
+#include <glibmm/refptr.h>
+
 #include <sigc++/slot.h>
 
 #include <memory>
@@ -29,6 +32,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace ase::explorer {
 
@@ -42,11 +46,18 @@ public:
     /** Rebuild the model from root_path; caches submodule metadata internally. */
     void populate(const std::string& root_path);
 
-    /** Returns the currently-selected FileInfo (empty if nothing is selected). */
+    /** Returns the FileInfo of the first-selected row, empty if none. */
     ase::gtk::FileInfo selected_file_info() const;
 
-    /** Returns the full path of the selected row, or empty string. */
+    /** Returns the full path of the first-selected row, or empty string. */
     std::string selected_path() const;
+
+    /**
+     * Returns the full paths of ALL currently-selected rows in tree order.
+     * Used by the drag source so multi-selection drops carry every marked
+     * file/folder, not just the focused one.
+     */
+    std::vector<std::string> selected_paths() const;
 
     /** Activate the current selection: open file or toggle folder expansion. */
     void activate_selection();
@@ -86,7 +97,11 @@ private:
 
     std::unique_ptr<ase::gtk::ListView> m_list_view;
     std::unique_ptr<ase::gtk::TreeListModel> m_tree_model;
-    std::unique_ptr<ase::gtk::SingleSelection> m_selection;
+    // Gtk::MultiSelection lets the user extend the selection with Shift-click
+    // and Ctrl-click out of the box. Held as a raw gtkmm refptr because the
+    // adapter currently only wraps Gtk::SingleSelection; no wrapper is
+    // needed here since tree_view is the only consumer.
+    Glib::RefPtr<Gtk::MultiSelection> m_selection;
     std::unique_ptr<ase::gtk::ListItemFactory> m_factory;
 
     sigc::slot<void(const std::string&)> m_on_selection_changed;
