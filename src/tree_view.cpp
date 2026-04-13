@@ -309,6 +309,16 @@ void TreeView::populate(const std::string& root_path) {
         ase::gtk::SingleSelection::create(*m_tree_model));
     m_selection->set_autoselect(false);
 
+    // Forward selection-change events to the installed callback so the
+    // window can update the breadcrumb bar live as the user clicks around
+    // in the tree.
+    m_selection->native()->signal_selection_changed().connect(
+        [this](guint, guint) {
+            if (m_on_selection_changed) {
+                m_on_selection_changed(selected_path());
+            }
+        });
+
     auto state = std::make_shared<FactoryState>();
     state->submodule_paths = &m_submodule_paths;
     state->metadata_cache = &m_metadata_cache;
@@ -478,6 +488,58 @@ void TreeView::activate_selection() {
     auto file = ase::gtk::File::create_for_path(full_path);
     auto launcher = ase::gtk::FileLauncher::create(file);
     launcher.launch(*m_list_view);
+}
+
+bool TreeView::navigate_to(const std::string& target_path) {
+    if (target_path.empty() || !m_tree_model || !m_selection || !m_list_view) {
+        return false;
+    }
+
+    // DFS walk through the flattened view. For every row whose full_path
+    // is a proper ancestor of target_path we expand it (safe because the
+    // sync dir store materialises children immediately). When we find the
+    // row whose full_path matches target_path exactly, we select it,
+    // expand it so its own children become visible, and scroll the list
+    // view so the row is in view.
+    unsigned int pos = 0;
+    while (true) {
+        auto row = m_tree_model->native()->get_row(pos);
+        if (!row) break;
+
+        ase::gtk::TreeListRow tree_row(row);
+        auto info = tree_row.get_file_info();
+        const std::string row_path = info.get_full_path();
+
+        if (row_path == target_path) {
+            m_selection->set_selected(pos);
+            if (info.is_directory() && !row->get_expanded()) {
+                row->set_expanded(true);
+            }
+            // Scroll the newly-selected row into view. GTK 4.12+ exposes
+            // gtk_list_view_scroll_to with a flags enum; FOCUS alone is
+            // enough to bring it on screen without fighting the selection
+            // state that we already set above.
+            gtk_list_view_scroll_to(
+                GTK_LIST_VIEW(m_list_view->native()->gobj()),
+                pos,
+                GTK_LIST_SCROLL_FOCUS,
+                nullptr);
+            return true;
+        }
+
+        // Expand row if it is a strict prefix ancestor of target_path,
+        // i.e. target_path starts with row_path + "/". Skip empty
+        // row_path (e.g. virtual root) to avoid matching everything.
+        if (!row_path.empty() && target_path.size() > row_path.size() &&
+            target_path.compare(0, row_path.size(), row_path) == 0 &&
+            target_path[row_path.size()] == '/') {
+            if (info.is_directory() && !row->get_expanded()) {
+                row->set_expanded(true);
+            }
+        }
+        pos += 1;
+    }
+    return false;
 }
 
 bool TreeView::toggle_recursive_expand_selected() {

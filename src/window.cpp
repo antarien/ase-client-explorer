@@ -116,9 +116,42 @@ void ExplorerWindow::build_ui() {
         m_search_bar.toggle(false);
     });
 
-    // ── Breadcrumb segment click → navigate ──
+    // ── Breadcrumb segment click → navigate in place ──
+    // Within the current root we expand ancestors and select the target
+    // row so the tree stays loaded and only the clicked sub-path becomes
+    // visible. Clicks on segments OUTSIDE the current root fall back to
+    // load_root so the user can still jump upwards (e.g. via the
+    // BREADCRUMB_BASE anchor levels).
     m_breadcrumb.on_segment_clicked([this](const std::string& path) {
-        load_root(path);
+        if (path == m_root_path) return;  // clicking current root is a no-op
+
+        const bool inside_root =
+            path.size() > m_root_path.size() &&
+            path.compare(0, m_root_path.size(), m_root_path) == 0 &&
+            path[m_root_path.size()] == '/';
+
+        if (inside_root) {
+            m_tree_view.navigate_to(path);
+        } else {
+            load_root(path);
+        }
+    });
+
+    // ── Tree selection change → breadcrumb update ──
+    // Shows the absolute directory path of the currently-selected row as
+    // clickable segments. Files never appear as trailing segments: when a
+    // file is selected the breadcrumb shows the path to its containing
+    // directory instead. Empty selection falls back to the current root so
+    // the bar never becomes blank.
+    m_tree_view.on_selection_changed([this](const std::string& selected) {
+        if (selected.empty()) {
+            m_breadcrumb.update(m_root_path);
+            return;
+        }
+        const std::string dir = ase::utils::fs::is_directory(selected)
+            ? selected
+            : ase::utils::fs::parent_of(selected);
+        m_breadcrumb.update(dir.empty() ? m_root_path : dir);
     });
 
     // ── Double-click gesture for file open / folder toggle ──
@@ -206,11 +239,20 @@ void ExplorerWindow::build_ui() {
 }
 
 void ExplorerWindow::load_root(const std::string& path) {
-    m_root_path = path;
-    m_tree_view.populate(path);
-    m_breadcrumb.update(path);
-    m_file_watcher.start(path);
-    m_window.set_title("ASE Explorer \u2014 " + ase::utils::fs::filename_of(path));
+    // Breadcrumb segments may point at files (the user clicked a file in
+    // the tree; the breadcrumb shows the full selection path down to that
+    // filename). Jumping to a file as a new root makes no sense - resolve
+    // file paths to their containing directory instead.
+    const std::string resolved = ase::utils::fs::is_directory(path)
+        ? path
+        : ase::utils::fs::parent_of(path);
+    if (resolved.empty()) return;
+
+    m_root_path = resolved;
+    m_tree_view.populate(resolved);
+    m_breadcrumb.update(resolved);
+    m_file_watcher.start(resolved);
+    m_window.set_title("ASE Explorer \u2014 " + ase::utils::fs::filename_of(resolved));
 }
 
 void ExplorerWindow::refresh() {
