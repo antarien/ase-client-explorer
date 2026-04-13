@@ -45,16 +45,47 @@ configure_file(
 
 message(STATUS "Configuring ${PROJECT_NAME} v${PROJECT_VERSION}")
 
-# ── System Dependencies ──────────────────────────────────────────────
+# ── Foundation dependencies (built standalone if not already in scope) ──
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GTKMM REQUIRED IMPORTED_TARGET gtkmm-4.0)
-pkg_check_modules(LIBADW REQUIRED IMPORTED_TARGET libadwaita-1)
+if(NOT TARGET ase::utils)
+    set(ASE_FOUNDATION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../foundation)
+    add_subdirectory(${ASE_FOUNDATION_PATH}/ase-utils ${CMAKE_BINARY_DIR}/_deps/ase-utils-build)
+endif()
+
+if(NOT TARGET ase::fileio)
+    set(ASE_FOUNDATION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../foundation)
+    add_subdirectory(${ASE_FOUNDATION_PATH}/ase-fileio ${CMAKE_BINARY_DIR}/_deps/ase-fileio-build)
+endif()
+
+# ── Adapter dependencies (built standalone if not already in scope) ─────
+
+if(NOT TARGET ase::gtk)
+    set(ASE_ADAPTER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../adapter)
+    add_subdirectory(${ASE_ADAPTER_PATH}/ase-gtk-adapter ${CMAKE_BINARY_DIR}/_deps/ase-gtk-adapter-build)
+endif()
 
 # ── Desktop Executable ───────────────────────────────────────────────
+#
+# SOLID/SSOT layout: main.cpp is a pure orchestrator (~80 lines). Every
+# feature lives in its own translation unit with a single responsibility
+# under include/explorer and src/. Add new features by dropping a new
+# .cpp file here and an .hpp file under include/explorer.
 
 add_executable(ase-explorer
     src/main.cpp
+    src/icons.cpp
+    src/exclude.cpp
+    src/submodule.cpp
+    src/theme.cpp
+    src/search_bar.cpp
+    src/breadcrumb.cpp
+    src/file_watcher.cpp
+    src/clipboard_ops.cpp
+    src/context_menu.cpp
+    src/keyboard_shortcuts.cpp
+    src/settings_dialog.cpp
+    src/tree_view.cpp
+    src/window.cpp
 )
 
 target_include_directories(ase-explorer
@@ -66,8 +97,9 @@ target_include_directories(ase-explorer
 
 target_link_libraries(ase-explorer
     PRIVATE
-        PkgConfig::GTKMM
-        PkgConfig::LIBADW
+        ase::gtk
+        ase::utils
+        ase::fileio
 )
 
 set_target_properties(ase-explorer PROPERTIES
