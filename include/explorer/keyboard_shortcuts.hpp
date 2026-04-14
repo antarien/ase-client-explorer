@@ -21,7 +21,7 @@
  * @layer       5
  */
 
-#include <ase/gtk/application.hpp>
+#include <ase/adp/gtk/application.hpp>
 
 #include <sigc++/slot.h>
 

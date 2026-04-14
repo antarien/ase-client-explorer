@@ -13,8 +13,8 @@
 
 #include <explorer/context_menu.hpp>
 
-#include <ase/gtk/menu.hpp>
-#include <ase/gtk/gesture.hpp>
+#include <ase/adp/gtk/menu.hpp>
+#include <ase/adp/gtk/gesture.hpp>
 
 #include <memory>
 

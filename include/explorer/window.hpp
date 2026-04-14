@@ -21,12 +21,14 @@
 
 #include <explorer/breadcrumb.hpp>
 #include <explorer/context_menu.hpp>
+#include <explorer/explorer_settings.hpp>
+#include <explorer/file_associations.hpp>
 #include <explorer/file_watcher.hpp>
 #include <explorer/keyboard_shortcuts.hpp>
 #include <explorer/search_bar.hpp>
 #include <explorer/tree_view.hpp>
 
-#include <ase/gtk/application.hpp>
+#include <ase/adp/gtk/application.hpp>
 
 #include <string>
 
@@ -51,6 +53,7 @@ public:
 private:
     // Handlers invoked by the feature slices via their stored slots.
     void handle_activate_selection();
+    void handle_file_activated(const std::string& path);
     void handle_right_click_open_with();
     void handle_right_click_open_terminal();
     void handle_right_click_reveal();
@@ -68,6 +71,8 @@ private:
     ContextMenu       m_context_menu;
     KeyboardShortcuts m_shortcuts;
     FileWatcher       m_file_watcher;
+    FileAssociations  m_file_associations = FileAssociations::load();
+    ExplorerSettings  m_settings          = ExplorerSettings::load();
 };
 
 }  // namespace ase::explorer

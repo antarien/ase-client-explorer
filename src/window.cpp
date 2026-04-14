@@ -12,13 +12,19 @@
 
 #include <explorer/window.hpp>
 
+#include <explorer/app_catalog.hpp>
 #include <explorer/clipboard_ops.hpp>
+#include <explorer/icons.hpp>
+#include <explorer/open_with_dialog.hpp>
 #include <explorer/settings_dialog.hpp>
 #include <explorer/types.hpp>
 
-#include <ase/gtk/gesture.hpp>
-#include <ase/gtk/io.hpp>
-#include <ase/gtk/widget.hpp>
+#include "colors.hpp"
+#include "ui_icons.hpp"
+
+#include <ase/adp/gtk/gesture.hpp>
+#include <ase/adp/gtk/io.hpp>
+#include <ase/adp/gtk/widget.hpp>
 #include <ase/utils/fs.hpp>
 
 #include <giomm/file.h>
@@ -57,34 +63,48 @@ void ExplorerWindow::build_ui() {
     // Search entry goes on the start side (hidden until toggled).
     header.pack_start(m_search_bar.entry());
 
-    // Settings / refresh / search-toggle buttons on the end side.
-    auto btn_settings = ase::gtk::Button::create_from_icon("emblem-system-symbolic");
+    // Header-bar glyph buttons. Every glyph traces back to the SSOT
+    // (icon-definitions.ts → ui_icons.hpp). gnome-icon-theme symbolic
+    // names are FORBIDDEN in this client per INST_ASE_ICO_SYS.md.
+    constexpr uint32_t header_glyph_color = ase::colors::TEXT_LIGHT & 0xFFFFFF;
+    auto set_glyph = [](ase::gtk::Button& b, char32_t g) {
+        GtkWidget* lbl = ase::explorer::icons::make_glyph_label(
+            g, header_glyph_color, ase::explorer::icons::ICON_FONT_SIZE);
+        gtk_button_set_child(GTK_BUTTON(b.native()->gobj()), lbl);
+    };
+
+    auto btn_settings = ase::gtk::Button::create();
+    set_glyph(btn_settings, ase::ui_icons::ICON_SETTINGS);
     btn_settings.set_tooltip_text("Settings (Ctrl+,)");
-    btn_settings.on_clicked([this]() { settings_dialog::show(m_window); });
+    btn_settings.on_clicked([this]() { settings_dialog::show(m_window, m_file_associations, m_settings, m_root_path,
+                              [this]() {
+                                  m_breadcrumb.set_max_segments(m_settings.breadcrumb_max_segments());
+                                  refresh();
+                              }); });
     header.pack_end(btn_settings);
 
-    auto btn_refresh = ase::gtk::Button::create_from_icon("view-refresh-symbolic");
+    auto btn_refresh = ase::gtk::Button::create();
+    set_glyph(btn_refresh, ase::ui_icons::ICON_REFRESH);
     btn_refresh.set_tooltip_text("Refresh (F5)");
     btn_refresh.on_clicked([this]() { refresh(); });
     header.pack_end(btn_refresh);
 
-    auto btn_search = ase::gtk::Button::create_from_icon("system-search-symbolic");
+    auto btn_search = ase::gtk::Button::create();
+    set_glyph(btn_search, ase::ui_icons::ICON_SEARCH);
     btn_search.set_tooltip_text("Search (Ctrl+F)");
     btn_search.on_clicked([this]() { handle_search_toggle(); });
     header.pack_end(btn_search);
 
-    // Expand-toggle: recursively expand or collapse the selected row.
-    auto btn_expand = ase::gtk::Button::create_from_icon("pan-down-symbolic");
+    auto btn_expand = ase::gtk::Button::create();
+    set_glyph(btn_expand, ase::ui_icons::ICON_CARET_DOWN);
     btn_expand.set_tooltip_text("Expand / collapse selected item");
     btn_expand.on_clicked([this]() {
         m_tree_view.toggle_recursive_expand_selected();
     });
     header.pack_end(btn_expand);
 
-    // Copy the current root path (what the breadcrumb is showing) to the
-    // clipboard. Anchored to the tree list view so the clipboard helper
-    // picks up the correct display.
-    auto btn_copy = ase::gtk::Button::create_from_icon("edit-copy-symbolic");
+    auto btn_copy = ase::gtk::Button::create();
+    set_glyph(btn_copy, ase::ui_icons::ICON_COPY);
     btn_copy.set_tooltip_text("Copy current path");
     btn_copy.on_clicked([this]() {
         if (!m_root_path.empty()) {
@@ -137,6 +157,19 @@ void ExplorerWindow::build_ui() {
         }
     });
 
+    // ── File activation → consult FileAssociations and launch (no fallback) ──
+    m_tree_view.on_file_activated([this](const std::string& path) {
+        handle_file_activated(path);
+    });
+
+    // ── Mapping indicator dot: tree row factory consults this predicate ──
+    m_tree_view.set_extension_mapping_check([this](const std::string& ext) {
+        return !m_file_associations.lookup(ext).empty();
+    });
+
+    // ── Apply persisted breadcrumb max segments setting ──
+    m_breadcrumb.set_max_segments(m_settings.breadcrumb_max_segments());
+
     // ── Tree selection change → breadcrumb update ──
     // Shows the absolute directory path of the currently-selected row as
     // clickable segments. Files never appear as trailing segments: when a
@@ -154,13 +187,31 @@ void ExplorerWindow::build_ui() {
         m_breadcrumb.update(dir.empty() ? m_root_path : dir);
     });
 
-    // ── Double-click gesture for file open / folder toggle ──
+    // ── Single-click gesture: toggle folders anywhere on the row ──
+    // GtkGestureClick with n_press is unreliable for double-click on a
+    // GtkListView because the listview's internal click handling consumes
+    // the second event before our gesture sees n_press=2. We therefore
+    // use the gesture ONLY for the custom n_press=1 folder-toggle and
+    // delegate true row activation (= n_press=2 / Enter) to the canonical
+    // GtkListView::activate signal below.
     auto click = ase::gtk::ClickGesture::create();
     click.set_button(ase::gtk::MouseButton::Primary);
     click.on_released([this](int n_press, double, double) {
-        if (n_press == 2) handle_activate_selection();
+        if (n_press == 1) m_tree_view.toggle_selected_folder();
     });
     m_tree_view.list_view().add_controller(click);
+
+    // ── Canonical row activation (double-click + Enter) ──
+    // GtkListView emits "activate" on its own — drop straight to the
+    // C signal so the wrapper layer doesn't have to grow an `on_activate`.
+    g_signal_connect(
+        G_OBJECT(m_tree_view.list_view().native()->gobj()),
+        "activate",
+        G_CALLBACK(+[](GtkListView*, guint /*position*/, gpointer user_data) {
+            auto* self = static_cast<ExplorerWindow*>(user_data);
+            if (self) self->handle_activate_selection();
+        }),
+        this);
 
     // ── Context menu ──
     m_context_menu.on_open         ([this]() { handle_activate_selection(); });
@@ -232,7 +283,11 @@ void ExplorerWindow::build_ui() {
 
     // ── Keyboard shortcuts ──
     m_shortcuts.on_refresh          ([this]() { refresh(); });
-    m_shortcuts.on_settings         ([this]() { settings_dialog::show(m_window); });
+    m_shortcuts.on_settings         ([this]() { settings_dialog::show(m_window, m_file_associations, m_settings, m_root_path,
+                              [this]() {
+                                  m_breadcrumb.set_max_segments(m_settings.breadcrumb_max_segments());
+                                  refresh();
+                              }); });
     m_shortcuts.on_toggle_search    ([this]() { handle_search_toggle(); });
     m_shortcuts.on_copy_absolute    ([this]() { handle_copy_path(false); });
     m_shortcuts.on_copy_relative    ([this]() { handle_copy_path(true); });
@@ -278,11 +333,26 @@ void ExplorerWindow::handle_activate_selection() {
 }
 
 void ExplorerWindow::handle_right_click_open_with() {
-    auto path = m_tree_view.selected_path();
+    const std::string path = m_tree_view.selected_path();
     if (path.empty()) return;
-    auto file = ase::gtk::File::create_for_path(path);
-    auto launcher = ase::gtk::FileLauncher::create(file);
-    launcher.open_containing_folder(m_tree_view.list_view());
+    open_with_dialog::show(m_window, path, m_file_associations);
+}
+
+void ExplorerWindow::handle_file_activated(const std::string& path) {
+    if (path.empty()) return;
+    // Strict explicit-mapping policy: extract the lowercase extension and
+    // look it up. If no mapping is configured, do nothing — there is no
+    // implicit fallback to the OS-default app, by user policy.
+    //
+    // CRITICAL: parse the dot from the BASENAME, not the full path.
+    // /a/foo.bar/baz would otherwise pick up ".bar/baz" as the extension.
+    const std::string filename = ase::utils::fs::filename_of(path);
+    const auto dot = filename.rfind('.');
+    if (dot == std::string::npos || dot == 0 || dot + 1 >= filename.size()) return;
+    const std::string ext = filename.substr(dot + 1);
+    const std::string desktop_id = m_file_associations.lookup(ext);
+    if (desktop_id.empty()) return;
+    app_catalog::launch(desktop_id, path);
 }
 
 void ExplorerWindow::handle_right_click_open_terminal() {

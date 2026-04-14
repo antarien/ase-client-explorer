@@ -12,7 +12,7 @@
 
 #include <explorer/keyboard_shortcuts.hpp>
 
-#include <ase/gtk/gesture.hpp>
+#include <ase/adp/gtk/gesture.hpp>
 
 namespace ase::explorer {
 

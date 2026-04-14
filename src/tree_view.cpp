@@ -17,9 +17,9 @@
 #include <explorer/exclude.hpp>
 #include <explorer/icons.hpp>
 
-#include <ase/gtk/io.hpp>
-#include <ase/gtk/tree.hpp>
-#include <ase/gtk/widget.hpp>
+#include <ase/adp/gtk/io.hpp>
+#include <ase/adp/gtk/tree.hpp>
+#include <ase/adp/gtk/widget.hpp>
 #include <ase/utils/strops.hpp>
 
 #include <gtkmm/drawingarea.h>
@@ -27,12 +27,14 @@
 #include <giomm/file.h>
 #include <giomm/fileenumerator.h>
 #include <giomm/liststore.h>
+#include <glibmm/markup.h>
 #include <gtk/gtk.h>
 #include <cairo.h>
 
 #include <algorithm>
 
 #include <cctype>
+#include <cstring>
 #include <new>
 #include <string>
 #include <vector>
@@ -155,6 +157,7 @@ struct RowWidgets {
     GuideState* guide_state = nullptr;        // lifetime owned by guide_area via destroy notify
     ase::gtk::Label icon_label;
     ase::gtk::Label name_label;
+    ase::gtk::Label mapping_dot;
     ase::gtk::Label badge_label;
     ase::gtk::TreeExpander expander;
 };
@@ -168,7 +171,38 @@ struct FactoryState {
     // Root ListModel reference used to check is_last_sibling() for depth-0 rows
     // whose get_parent() returns null.
     Glib::RefPtr<Gio::ListModel> root_model;
+    // Predicate from ExplorerWindow that says whether a given file extension
+    // is currently mapped in FileAssociations. Empty slot disables the dot.
+    const sigc::slot<bool(const std::string&)>* is_extension_mapped = nullptr;
 };
+
+// Lowercase the basename's extension without leading dot. Empty if the file
+// has no extension or starts with a dot (hidden file).
+std::string extension_of(const std::string& filename) {
+    if (filename.empty() || filename[0] == '.') return {};
+    const auto dot = filename.rfind('.');
+    if (dot == std::string::npos || dot == 0 || dot + 1 >= filename.size()) return {};
+    std::string ext = filename.substr(dot + 1);
+    for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return ext;
+}
+
+// Pango markup for the "extension is mapped" indicator. Same NerdFont
+// family + same 9pt size as the submodule status badge (build_badge_markup)
+// so both indicators have identical visual weight. The glyph is the SSOT
+// nf-fa-square (U+F0C8, ICON_SQUARE in ui_icons.hpp) — NOT the raw Unicode
+// black square U+25A0 — so it traces back to icon-definitions.ts and the
+// icon offset system. The colour is PANEL_PURPLE to stay distinct from
+// the submodule palette (cyan/green/orange/yellow).
+//
+// nf-fa-square is not in iconOffsetExceptions, so the canonical offset
+// per icon-replacer.ts is DEFAULT_ICON_OFFSET = { x: -2, y: -1 }. We do
+// not apply it here for parity with build_badge_markup, which also omits
+// pixel offsets — both labels rely on natural Pango centering inside the
+// flowing row layout.
+constexpr const char* MAPPING_DOT_MARKUP =
+    "<span font_family='FiraCode Nerd Font, JetBrainsMono Nerd Font Mono'"
+    " foreground='#7A5A9C' font_size='9216'>\xEF\x83\x88</span>";  // nf-fa-square
 
 // True if `row` is the last of its siblings in its parent row's child model.
 // For root-level rows (parent == null), `root_model` is queried instead.
@@ -262,8 +296,11 @@ Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(const std::stri
 std::string build_badge_markup(const submodule::SubmoduleInfo& meta) {
     char hex[8];
     ase::utils::format_hex_color(hex, sizeof(hex), submodule::status_color(meta.status));
+    // SSOT square: nf-fa-square (U+F0C8 = ICON_SQUARE in ui_icons.hpp). The
+    // file-mapping indicator uses the exact same glyph + size so both row
+    // markers have identical visual weight; only the colour differs.
     std::string badge = "<span font_family='" + std::string(icons::ICON_FONT) + "' font_size='"
-        + std::to_string(9 * 1024) + "' foreground='" + std::string(hex) + "'>\u25CF</span>"
+        + std::to_string(9 * 1024) + "' foreground='" + std::string(hex) + "'>\xEF\x83\x88</span>"
         " <span font_family='" + std::string(icons::TEXT_FONT) + "' font_size='"
         + std::to_string(9 * 1024) + "' foreground='#5A5A5A'>[";
     if (meta.layer >= 0) badge += "L" + std::to_string(meta.layer) + " ";
@@ -326,6 +363,7 @@ void TreeView::populate(const std::string& root_path) {
     state->submodule_paths = &m_submodule_paths;
     state->metadata_cache = &m_metadata_cache;
     state->root_model = root_store;
+    state->is_extension_mapped = &m_is_extension_mapped;
 
     auto factory = ase::gtk::ListItemFactory::create();
 
@@ -355,11 +393,21 @@ void TreeView::populate(const std::string& root_path) {
         name_label.set_hexpand(true);
         name_label.set_margin_start(6);
 
+        // Mapping indicator: a small coloured dot painted in the accent
+        // colour (PANEL_CYAN) when the file's extension has an explicit
+        // FileAssociations entry. Hidden by default — bind() sets the
+        // markup per row.
+        auto mapping_dot = ase::gtk::Label::create("");
+        mapping_dot.set_xalign(0.5f);
+        mapping_dot.set_margin_start(4);
+        mapping_dot.set_margin_end(4);
+
         auto badge_label = ase::gtk::Label::create("");
         badge_label.set_xalign(1.0f);
 
         inner.append(icon_label);
         inner.append(name_label);
+        inner.append(mapping_dot);
         inner.append(badge_label);
         // Vertical breathing room was previously applied as listview > row
         // padding, but the drawing area needs to span the full row height
@@ -380,7 +428,8 @@ void TreeView::populate(const std::string& root_path) {
         outer.append(expander);
         item.set_child(outer);
 
-        RowWidgets widgets{guide_area, guide_state, icon_label, name_label, badge_label, expander};
+        RowWidgets widgets{guide_area, guide_state, icon_label, name_label,
+                           mapping_dot, badge_label, expander};
         state->row_widgets.insert_or_assign(item.native().get(), widgets);
     });
 
@@ -420,12 +469,78 @@ void TreeView::populate(const std::string& root_path) {
         const bool is_dir = info.is_directory();
         const bool is_submodule = state->submodule_paths->count(full_path) > 0;
 
-        widgets.name_label.set_text(name);
+        // ── Per-row colour overrides (applied to both icon and name) ──
+        //
+        //  is_docs : any FOLDER whose name contains "docs" (case insensitive),
+        //            at any depth → PANEL_PURPLE (#7A5A9C). Catches "docs",
+        //            "ase-docs", "user-docs", "Docs", etc.
+        //  is_muted: any name starting with '.' or '_' (hidden / private
+        //            convention) → TEXT_DIM (#4A4A4A) dark grey, files AND
+        //            folders, at any depth.
+        //
+        // is_docs takes precedence: a folder literally named "_docs" would
+        // otherwise be muted, but the docs-marker conveys more semantic
+        // information so we keep it visible in purple.
+        auto contains_ci_substr = [](const std::string& haystack, const char* needle) {
+            const size_t nlen = std::strlen(needle);
+            if (haystack.size() < nlen) return false;
+            for (size_t i = 0; i + nlen <= haystack.size(); ++i) {
+                bool ok = true;
+                for (size_t j = 0; j < nlen; ++j) {
+                    char a = std::tolower(static_cast<unsigned char>(haystack[i + j]));
+                    char b = std::tolower(static_cast<unsigned char>(needle[j]));
+                    if (a != b) { ok = false; break; }
+                }
+                if (ok) return true;
+            }
+            return false;
+        };
+
+        const bool is_docs  = is_dir && contains_ci_substr(name, "docs");
+        const bool is_muted = !name.empty() && (name[0] == '.' || name[0] == '_');
+
+        if (is_docs) {
+            widgets.name_label.set_markup(
+                "<span foreground='#7A5A9C'>"
+                + Glib::Markup::escape_text(name).raw() + "</span>");
+        } else if (is_muted) {
+            widgets.name_label.set_markup(
+                "<span foreground='#4A4A4A'>"
+                + Glib::Markup::escape_text(name).raw() + "</span>");
+        } else {
+            widgets.name_label.set_text(name);
+        }
 
         icons::ResolvedIcon ri = is_dir
             ? icons::get_folder_icon(tree_row.get_expanded(), is_submodule)
             : icons::get_file_icon(name);
+        if (is_docs) {
+            ri.r = 0x7A / 255.0;
+            ri.g = 0x5A / 255.0;
+            ri.b = 0x9C / 255.0;
+        } else if (is_muted) {
+            ri.r = 0x4A / 255.0;
+            ri.g = 0x4A / 255.0;
+            ri.b = 0x4A / 255.0;
+        }
         widgets.icon_label.set_markup(icons::icon_markup(ri));
+
+        // Mapping indicator: only files, only when the extension is
+        // configured in FileAssociations. The check comes from a slot
+        // installed by ExplorerWindow so this module stays decoupled.
+        if (!is_dir && state->is_extension_mapped && *state->is_extension_mapped) {
+            const std::string ext = extension_of(name);
+            if (!ext.empty() && (*state->is_extension_mapped)(ext)) {
+                widgets.mapping_dot.set_markup(MAPPING_DOT_MARKUP);
+                widgets.mapping_dot.set_tooltip_text("." + ext + " is mapped");
+            } else {
+                widgets.mapping_dot.set_markup("");
+                widgets.mapping_dot.set_tooltip_text("");
+            }
+        } else {
+            widgets.mapping_dot.set_markup("");
+            widgets.mapping_dot.set_tooltip_text("");
+        }
 
         if (is_submodule) {
             auto& cache = *state->metadata_cache;
@@ -525,9 +640,23 @@ void TreeView::activate_selection() {
     auto full_path = info.get_full_path();
     if (full_path.empty()) return;
 
-    auto file = ase::gtk::File::create_for_path(full_path);
-    auto launcher = ase::gtk::FileLauncher::create(file);
-    launcher.launch(*m_list_view);
+    // File activation is delegated to the window so the FileAssociations
+    // store can drive the launch. No implicit Gio fallback here — files
+    // without an explicit user mapping intentionally do nothing on
+    // activation; the user opens them via the context menu's Open With…
+    if (m_on_file_activated) m_on_file_activated(full_path);
+}
+
+void TreeView::toggle_selected_folder() {
+    const guint pos = first_selected_position(m_selection);
+    if (pos == GTK_INVALID_LIST_POSITION) return;
+    auto sel_obj = m_selection->get_object(pos);
+    auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(sel_obj);
+    if (!row) return;
+    ase::gtk::TreeListRow tree_row(row);
+    auto info = tree_row.get_file_info();
+    if (!info.is_directory()) return;
+    tree_row.set_expanded(!tree_row.get_expanded());
 }
 
 bool TreeView::navigate_to(const std::string& target_path) {
