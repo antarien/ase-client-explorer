@@ -155,11 +155,11 @@ void guide_destroy_notify(gpointer data) {
 struct RowWidgets {
     Gtk::DrawingArea* guide_area = nullptr;   // row-owned (managed), lives as long as the row widget
     GuideState* guide_state = nullptr;        // lifetime owned by guide_area via destroy notify
-    ase::gtk::Label icon_label;
-    ase::gtk::Label name_label;
-    ase::gtk::Label mapping_dot;
-    ase::gtk::Label badge_label;
-    ase::gtk::TreeExpander expander;
+    ase::adp::gtk::Label icon_label;
+    ase::adp::gtk::Label name_label;
+    ase::adp::gtk::Label mapping_dot;
+    ase::adp::gtk::Label badge_label;
+    ase::adp::gtk::TreeExpander expander;
 };
 
 // Per-factory state shared by the setup/bind/teardown lambdas. Lives as long
@@ -311,7 +311,7 @@ std::string build_badge_markup(const submodule::SubmoduleInfo& meta) {
 }  // namespace
 
 TreeView::TreeView()
-    : m_list_view(std::make_unique<ase::gtk::ListView>(ase::gtk::ListView::create()))
+    : m_list_view(std::make_unique<ase::adp::gtk::ListView>(ase::adp::gtk::ListView::create()))
 {
     m_list_view->set_vexpand(true);
     m_list_view->set_hexpand(true);
@@ -330,18 +330,18 @@ void TreeView::populate(const std::string& root_path) {
     // expand button relies on.
     auto root_store = build_sync_dir_store(root_path);
 
-    auto tree = ase::gtk::TreeListModel::create(
+    auto tree = ase::adp::gtk::TreeListModel::create(
         Glib::RefPtr<Gio::ListModel>(root_store),
         /*passthrough*/ false,
         /*autoexpand*/  false,
-        [](ase::gtk::FileInfo& info) -> Glib::RefPtr<Gio::ListModel> {
+        [](ase::adp::gtk::FileInfo& info) -> Glib::RefPtr<Gio::ListModel> {
             if (!info.is_directory()) return {};
             auto child_path = info.get_full_path();
             if (child_path.empty()) return {};
             return build_sync_dir_store(child_path);
         });
 
-    m_tree_model = std::make_unique<ase::gtk::TreeListModel>(tree);
+    m_tree_model = std::make_unique<ase::adp::gtk::TreeListModel>(tree);
     // MultiSelection gives us Shift-click range selection and Ctrl-click
     // toggle for free. ListView::set_model on the adapter wrapper only
     // accepts SingleSelection so we reach through native() and install the
@@ -365,9 +365,9 @@ void TreeView::populate(const std::string& root_path) {
     state->root_model = root_store;
     state->is_extension_mapped = &m_is_extension_mapped;
 
-    auto factory = ase::gtk::ListItemFactory::create();
+    auto factory = ase::adp::gtk::ListItemFactory::create();
 
-    factory.on_setup([state](ase::gtk::ListItem& item) {
+    factory.on_setup([state](ase::adp::gtk::ListItem& item) {
         // Tree guide rail: a Gtk::DrawingArea painted via Cairo in
         // guide_draw_trampoline. The state struct is owned by the drawing
         // area through the destroy notify so freeing the widget frees the
@@ -381,13 +381,13 @@ void TreeView::populate(const std::string& root_path) {
             guide_destroy_notify);
         guide_area->set_size_request(0, -1);  // width is updated per row in bind
 
-        auto inner = ase::gtk::Box::horizontal(4);
+        auto inner = ase::adp::gtk::Box::horizontal(4);
 
-        auto icon_label = ase::gtk::Label::create("");
+        auto icon_label = ase::adp::gtk::Label::create("");
         icon_label.set_xalign(0.5f);
         icon_label.set_size_request(22, -1);
 
-        auto name_label = ase::gtk::Label::create("");
+        auto name_label = ase::adp::gtk::Label::create("");
         name_label.set_xalign(0.0f);
         name_label.enable_ellipsize_end();
         name_label.set_hexpand(true);
@@ -397,12 +397,12 @@ void TreeView::populate(const std::string& root_path) {
         // colour (PANEL_CYAN) when the file's extension has an explicit
         // FileAssociations entry. Hidden by default — bind() sets the
         // markup per row.
-        auto mapping_dot = ase::gtk::Label::create("");
+        auto mapping_dot = ase::adp::gtk::Label::create("");
         mapping_dot.set_xalign(0.5f);
         mapping_dot.set_margin_start(4);
         mapping_dot.set_margin_end(4);
 
-        auto badge_label = ase::gtk::Label::create("");
+        auto badge_label = ase::adp::gtk::Label::create("");
         badge_label.set_xalign(1.0f);
 
         inner.append(icon_label);
@@ -419,11 +419,11 @@ void TreeView::populate(const std::string& root_path) {
         // TreeExpander still handles expand/collapse arrows, but we disable
         // its own depth-indent - we draw the guide rail ourselves in
         // guide_area to get proper corners (├ / └) and ancestor pipes (│).
-        auto expander = ase::gtk::TreeExpander::create();
+        auto expander = ase::adp::gtk::TreeExpander::create();
         expander.native()->set_indent_for_depth(false);
         expander.set_child(inner);
 
-        auto outer = ase::gtk::Box::horizontal(0);
+        auto outer = ase::adp::gtk::Box::horizontal(0);
         outer.native()->append(*guide_area);
         outer.append(expander);
         item.set_child(outer);
@@ -433,7 +433,7 @@ void TreeView::populate(const std::string& root_path) {
         state->row_widgets.insert_or_assign(item.native().get(), widgets);
     });
 
-    factory.on_bind([state](ase::gtk::ListItem& item) {
+    factory.on_bind([state](ase::adp::gtk::ListItem& item) {
         auto it = state->row_widgets.find(item.native().get());
         if (it == state->row_widgets.end()) return;
         auto& widgets = it->second;
@@ -441,7 +441,7 @@ void TreeView::populate(const std::string& root_path) {
         auto row_obj = item.get_item_native();
         auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(row_obj);
         if (!row) return;
-        ase::gtk::TreeListRow tree_row(row);
+        ase::adp::gtk::TreeListRow tree_row(row);
         widgets.expander.set_list_row(tree_row);
 
         // Recompute the per-row guide state: depth + is_last chain walking
@@ -565,11 +565,11 @@ void TreeView::populate(const std::string& root_path) {
         }
     });
 
-    factory.on_teardown([state](ase::gtk::ListItem& item) {
+    factory.on_teardown([state](ase::adp::gtk::ListItem& item) {
         state->row_widgets.erase(item.native().get());
     });
 
-    m_factory = std::make_unique<ase::gtk::ListItemFactory>(factory);
+    m_factory = std::make_unique<ase::adp::gtk::ListItemFactory>(factory);
     // set_model was already installed via native() right after creating the
     // MultiSelection above; we only need to attach the factory here.
     m_list_view->set_factory(*m_factory);
@@ -591,15 +591,15 @@ guint first_selected_position(const Glib::RefPtr<Gtk::MultiSelection>& sel) {
 
 }  // namespace
 
-ase::gtk::FileInfo TreeView::selected_file_info() const {
+ase::adp::gtk::FileInfo TreeView::selected_file_info() const {
     const guint pos = first_selected_position(m_selection);
     if (pos == GTK_INVALID_LIST_POSITION) {
-        return ase::gtk::FileInfo(Glib::RefPtr<Gio::FileInfo>{});
+        return ase::adp::gtk::FileInfo(Glib::RefPtr<Gio::FileInfo>{});
     }
     auto sel_obj = m_selection->get_object(pos);
     auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(sel_obj);
-    if (!row) return ase::gtk::FileInfo(Glib::RefPtr<Gio::FileInfo>{});
-    ase::gtk::TreeListRow tree_row(row);
+    if (!row) return ase::adp::gtk::FileInfo(Glib::RefPtr<Gio::FileInfo>{});
+    ase::adp::gtk::TreeListRow tree_row(row);
     return tree_row.get_file_info();
 }
 
@@ -618,7 +618,7 @@ std::vector<std::string> TreeView::selected_paths() const {
         auto obj = m_selection->get_object(pos);
         auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(obj);
         if (!row) continue;
-        ase::gtk::TreeListRow tree_row(row);
+        ase::adp::gtk::TreeListRow tree_row(row);
         auto full = tree_row.get_file_info().get_full_path();
         if (!full.empty()) result.push_back(std::move(full));
     }
@@ -631,7 +631,7 @@ void TreeView::activate_selection() {
     auto sel_obj = m_selection->get_object(pos);
     auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(sel_obj);
     if (!row) return;
-    ase::gtk::TreeListRow tree_row(row);
+    ase::adp::gtk::TreeListRow tree_row(row);
     auto info = tree_row.get_file_info();
     if (info.is_directory()) {
         tree_row.set_expanded(!tree_row.get_expanded());
@@ -653,7 +653,7 @@ void TreeView::toggle_selected_folder() {
     auto sel_obj = m_selection->get_object(pos);
     auto row = std::dynamic_pointer_cast<Gtk::TreeListRow>(sel_obj);
     if (!row) return;
-    ase::gtk::TreeListRow tree_row(row);
+    ase::adp::gtk::TreeListRow tree_row(row);
     auto info = tree_row.get_file_info();
     if (!info.is_directory()) return;
     tree_row.set_expanded(!tree_row.get_expanded());
@@ -675,7 +675,7 @@ bool TreeView::navigate_to(const std::string& target_path) {
         auto row = m_tree_model->native()->get_row(pos);
         if (!row) break;
 
-        ase::gtk::TreeListRow tree_row(row);
+        ase::adp::gtk::TreeListRow tree_row(row);
         auto info = tree_row.get_file_info();
         const std::string row_path = info.get_full_path();
 
@@ -728,7 +728,7 @@ bool TreeView::toggle_recursive_expand_selected() {
     if (!root_row) return false;
 
     // Only directories can be expanded - silently ignore file selections.
-    ase::gtk::TreeListRow root_tree_row(root_row);
+    ase::adp::gtk::TreeListRow root_tree_row(root_row);
     if (!root_tree_row.get_file_info().is_directory()) return false;
 
     const bool want_expand = !root_row->get_expanded();

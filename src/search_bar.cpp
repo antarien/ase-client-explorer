@@ -13,7 +13,7 @@
 
 namespace ase::explorer {
 
-SearchBar::SearchBar() : m_entry(ase::gtk::SearchEntry::create()) {
+SearchBar::SearchBar() : m_entry(ase::adp::gtk::SearchEntry::create()) {
     m_entry.set_placeholder_text("Filter files...");
     m_entry.set_visible(false);
 }

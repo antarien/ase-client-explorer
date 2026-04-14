@@ -49,6 +49,10 @@ ExplorerSettings ExplorerSettings::load() {
     if (auto it = doc.find("breadcrumb_max_segments"); it != doc.end() && it->is_number_integer()) {
         out.m_breadcrumb_max = it->get<int>();
     }
+    if (auto it = doc.find("default_root"); it != doc.end() && it->is_string()) {
+        const std::string s = it->get<std::string>();
+        if (!s.empty()) out.m_default_root = s;
+    }
     return out;
 }
 
@@ -58,6 +62,7 @@ void ExplorerSettings::save() const {
 
     Json doc = Json::object();
     doc["breadcrumb_max_segments"] = m_breadcrumb_max;
+    doc["default_root"]            = m_default_root;
 
     std::ofstream out(m_path);
     if (!out) return;
@@ -66,6 +71,11 @@ void ExplorerSettings::save() const {
 
 void ExplorerSettings::set_breadcrumb_max_segments(int n) noexcept {
     m_breadcrumb_max = std::clamp(n, 3, 20);
+}
+
+void ExplorerSettings::set_default_root(const std::string& path) {
+    if (path.empty()) return;
+    m_default_root = path;
 }
 
 }  // namespace ase::explorer

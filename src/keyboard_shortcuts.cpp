@@ -32,8 +32,8 @@ constexpr unsigned int KEY_comma      = 0x002C;
 
 }  // namespace
 
-void KeyboardShortcuts::build(ase::gtk::ApplicationWindow& window) {
-    auto key = ase::gtk::KeyController::create();
+void KeyboardShortcuts::build(ase::adp::gtk::ApplicationWindow& window) {
+    auto key = ase::adp::gtk::KeyController::create();
 
     auto on_refresh       = m_on_refresh;
     auto on_settings      = m_on_settings;
@@ -44,9 +44,9 @@ void KeyboardShortcuts::build(ase::gtk::ApplicationWindow& window) {
     auto on_escape        = m_on_escape;
     auto search_open      = m_search_open;
 
-    key.on_key_pressed([=](unsigned int keyval, unsigned int, ase::gtk::Modifier state) -> bool {
-        const bool ctrl  = ase::gtk::has(state, ase::gtk::Modifier::Control);
-        const bool shift = ase::gtk::has(state, ase::gtk::Modifier::Shift);
+    key.on_key_pressed([=](unsigned int keyval, unsigned int, ase::adp::gtk::Modifier state) -> bool {
+        const bool ctrl  = ase::adp::gtk::has(state, ase::adp::gtk::Modifier::Control);
+        const bool shift = ase::adp::gtk::has(state, ase::adp::gtk::Modifier::Shift);
 
         if (keyval == KEY_F5) {
             if (on_refresh) on_refresh();

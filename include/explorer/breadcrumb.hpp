@@ -39,7 +39,7 @@ public:
     Breadcrumb();
 
     /** Widget that must be packed into a vertical Box above the tree view. */
-    ase::gtk::Box& widget() noexcept { return m_box; }
+    ase::adp::gtk::Box& widget() noexcept { return m_box; }
 
     /** Install the segment click handler: void(const std::string& path). */
     template <typename Callback>
@@ -52,6 +52,14 @@ public:
     void set_max_segments(int n);
     int  max_segments() const noexcept { return m_max_segments; }
 
+    /**
+     * Set the absolute path under which the breadcrumb starts emitting
+     * segments. Anything above this anchor is hidden so the first visible
+     * segment is the project root's basename. Window calls this from
+     * load_root() with the parent of the current root.
+     */
+    void set_base(const std::string& absolute_base);
+
     /** Rebuild the bar for a new absolute path. Resets the focus offset. */
     void update(const std::string& absolute_path);
 
@@ -59,10 +67,11 @@ private:
     void render();
     std::vector<Segment> current_segments() const;
 
-    ase::gtk::Box m_box;
+    ase::adp::gtk::Box m_box;
     sigc::slot<void(const std::string&)> m_on_segment_clicked;
 
     std::string m_current_path;
+    std::string m_base = "/mnt/code/SRC/GITHUB";  // initial fallback
     int         m_max_segments = 5;
     int         m_focus_offset = 0;  // shifts the visible middle window
 };

@@ -131,6 +131,71 @@ void on_breadcrumb_max_changed_cb(GtkSpinButton* sb, gpointer user_data) {
     settings->save();
 }
 
+// Entry callback for the default root path. Persists on every keystroke
+// so the on_close hook in window.cpp can pick up the new value.
+void on_default_root_changed_cb(GtkEditable* editable, gpointer user_data) {
+    auto* settings = static_cast<ExplorerSettings*>(user_data);
+    if (!settings) return;
+    const char* text = gtk_editable_get_text(editable);
+    if (!text) return;
+    settings->set_default_root(text);
+    settings->save();
+}
+
+// State owned by the "browse for root" button — the entry widget to write
+// back into and the settings store to persist. Allocated once at dialog
+// build time, attached to the button via g_object_set_data_full so it
+// dies with the button.
+struct RootBrowseState {
+    GtkWidget*        entry    = nullptr;
+    ExplorerSettings* settings = nullptr;
+};
+
+// GtkFileDialog::select_folder completion callback. Fires when the user
+// confirms a directory; writes the path back into the entry and persists.
+void on_root_folder_selected_cb(GObject* source, GAsyncResult* res, gpointer user_data) {
+    auto* bs = static_cast<RootBrowseState*>(user_data);
+    GError* err = nullptr;
+    GFile* folder = gtk_file_dialog_select_folder_finish(
+        GTK_FILE_DIALOG(source), res, &err);
+    if (folder) {
+        char* path = g_file_get_path(folder);
+        if (path && bs && bs->entry && bs->settings) {
+            gtk_editable_set_text(GTK_EDITABLE(bs->entry), path);
+            bs->settings->set_default_root(path);
+            bs->settings->save();
+        }
+        if (path) g_free(path);
+        g_object_unref(folder);
+    }
+    if (err) g_error_free(err);
+}
+
+// Browse-button click handler: opens GtkFileDialog::select_folder seeded
+// with the entry's current value as the initial folder.
+void on_browse_root_clicked_cb(GtkButton* btn, gpointer user_data) {
+    auto* bs = static_cast<RootBrowseState*>(user_data);
+    if (!bs || !bs->entry) return;
+
+    GtkRoot* root = gtk_widget_get_root(GTK_WIDGET(btn));
+    GtkWindow* parent = root ? GTK_WINDOW(root) : nullptr;
+
+    GtkFileDialog* dlg = gtk_file_dialog_new();
+    gtk_file_dialog_set_title(dlg, "Choose default root directory");
+
+    const char* current = gtk_editable_get_text(GTK_EDITABLE(bs->entry));
+    if (current && *current) {
+        GFile* initial = g_file_new_for_path(current);
+        gtk_file_dialog_set_initial_folder(dlg, initial);
+        g_object_unref(initial);
+    }
+
+    gtk_file_dialog_select_folder(dlg, parent, /*cancellable*/ nullptr,
+        on_root_folder_selected_cb, bs);
+
+    g_object_unref(dlg);
+}
+
 GtkWidget* build_display_page(ExplorerSettings& settings) {
     GtkWidget* page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_widget_add_css_class(page, "ase-cfg-window");
@@ -143,6 +208,50 @@ GtkWidget* build_display_page(ExplorerSettings& settings) {
         make_cell("GITIGNORED FILES",   make_toggle(false)),
         make_cell("COMPACT MODE",       make_toggle(false)),
     }));
+
+    gtk_box_append(GTK_BOX(page), make_section_strip("ROOT DIRECTORY"));
+
+    // The default-root cell is laid out by hand because make_cell() forces
+    // its child to halign=START — we want the entry to grow into the full
+    // available width so the user can read the entire path.
+    GtkWidget* root_cell = gtk_box_new(GTK_ORIENTATION_VERTICAL, t::space_xs);
+    gtk_widget_add_css_class(root_cell, "ase-cfg-cell");
+    gtk_widget_set_hexpand(root_cell, TRUE);
+
+    GtkWidget* root_label = gtk_label_new("DEFAULT ROOT PATH");
+    gtk_widget_add_css_class(root_label, "ase-cfg-cell-label");
+    gtk_label_set_xalign(GTK_LABEL(root_label), 0.0f);
+    gtk_box_append(GTK_BOX(root_cell), root_label);
+
+    GtkWidget* root_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, t::space_sm);
+    gtk_widget_set_hexpand(root_row, TRUE);
+    gtk_widget_set_halign(root_row, GTK_ALIGN_FILL);
+
+    GtkWidget* root_entry = gtk_entry_new();
+    gtk_editable_set_text(GTK_EDITABLE(root_entry), settings.default_root().c_str());
+    gtk_widget_set_tooltip_text(root_entry,
+        "Absolute path. Takes effect when this dialog closes.");
+    gtk_widget_set_hexpand(root_entry, TRUE);
+    gtk_widget_set_halign(root_entry, GTK_ALIGN_FILL);
+    g_signal_connect(root_entry, "changed",
+        G_CALLBACK(on_default_root_changed_cb), &settings);
+    gtk_box_append(GTK_BOX(root_row), root_entry);
+
+    GtkWidget* browse_btn = gtk_button_new_with_label("…");
+    gtk_widget_set_tooltip_text(browse_btn, "Browse for a directory…");
+    gtk_widget_set_valign(browse_btn, GTK_ALIGN_CENTER);
+
+    auto* bs = g_new0(RootBrowseState, 1);
+    bs->entry    = root_entry;
+    bs->settings = &settings;
+    g_object_set_data_full(G_OBJECT(browse_btn), "ase-browse-state", bs,
+        +[](gpointer p) { g_free(p); });
+    g_signal_connect(browse_btn, "clicked",
+        G_CALLBACK(on_browse_root_clicked_cb), bs);
+    gtk_box_append(GTK_BOX(root_row), browse_btn);
+
+    gtk_box_append(GTK_BOX(root_cell), root_row);
+    gtk_box_append(GTK_BOX(page), root_cell);
 
     gtk_box_append(GTK_BOX(page), make_section_strip("BREADCRUMB"));
 
@@ -261,7 +370,8 @@ GtkWidget* build_extension_row(const extension_scan::ExtensionCount& ec,
 }
 
 void rebuild_extensions_listbox(CockpitState* state) {
-    if (!state->extensions_listbox) return;
+    if (!state || !state->extensions_listbox
+        || !GTK_IS_LIST_BOX(state->extensions_listbox)) return;
 
     GtkWidget* child = gtk_widget_get_first_child(state->extensions_listbox);
     while (child) {
@@ -354,7 +464,11 @@ GtkWidget* build_chip(const std::string& extension,
 }
 
 void rebuild_chips_strip(CockpitState* state) {
-    if (!state->chips_box) return;
+    // Defensive: callbacks may fire during dialog teardown when chips_box
+    // has already been destroyed but the raw pointer in state hasn't been
+    // nulled. GTK_IS_BOX validates the GObject type tag and returns false
+    // on a finalized widget, so we bail out cleanly instead of asserting.
+    if (!state || !state->chips_box || !GTK_IS_BOX(state->chips_box)) return;
 
     GtkWidget* child = gtk_widget_get_first_child(state->chips_box);
     while (child) {
@@ -678,21 +792,21 @@ GtkWidget* build_associations_page(FileAssociations& associations,
 
 }  // namespace
 
-void show(ase::gtk::ApplicationWindow& parent,
+void show(ase::adp::gtk::ApplicationWindow& parent,
           FileAssociations& associations,
           ExplorerSettings& settings,
           const std::string& root_path,
           std::function<void()> on_close)
 {
-    auto window = ase::adw::Window::create();
+    auto window = ase::adp::adw::Window::create();
     window.set_title("Preferences");
     window.set_default_size(CFG_WIDTH, CFG_HEIGHT);
     window.set_transient_for(parent);
     window.set_modal(false);
 
-    auto toolbar = ase::adw::ToolbarView::create();
-    auto header  = ase::adw::HeaderBar::create();
-    auto stack   = ase::adw::ViewStack::create();
+    auto toolbar = ase::adp::adw::ToolbarView::create();
+    auto header  = ase::adp::adw::HeaderBar::create();
+    auto stack   = ase::adp::adw::ViewStack::create();
 
     // Header bar stays minimal — window controls only, NO title widget.
     // The shader-tuner aesthetic puts the tab bar in the body, not in

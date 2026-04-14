@@ -41,13 +41,13 @@ public:
     TreeView();
 
     /** The list view widget - pack into a ScrolledWindow and attach controllers. */
-    ase::gtk::ListView& list_view() noexcept { return *m_list_view; }
+    ase::adp::gtk::ListView& list_view() noexcept { return *m_list_view; }
 
     /** Rebuild the model from root_path; caches submodule metadata internally. */
     void populate(const std::string& root_path);
 
     /** Returns the FileInfo of the first-selected row, empty if none. */
-    ase::gtk::FileInfo selected_file_info() const;
+    ase::adp::gtk::FileInfo selected_file_info() const;
 
     /** Returns the full path of the first-selected row, or empty string. */
     std::string selected_path() const;
@@ -126,14 +126,14 @@ private:
     std::set<std::string> m_submodule_paths;
     std::unordered_map<std::string, submodule::SubmoduleInfo> m_metadata_cache;
 
-    std::unique_ptr<ase::gtk::ListView> m_list_view;
-    std::unique_ptr<ase::gtk::TreeListModel> m_tree_model;
+    std::unique_ptr<ase::adp::gtk::ListView> m_list_view;
+    std::unique_ptr<ase::adp::gtk::TreeListModel> m_tree_model;
     // Gtk::MultiSelection lets the user extend the selection with Shift-click
     // and Ctrl-click out of the box. Held as a raw gtkmm refptr because the
     // adapter currently only wraps Gtk::SingleSelection; no wrapper is
     // needed here since tree_view is the only consumer.
     Glib::RefPtr<Gtk::MultiSelection> m_selection;
-    std::unique_ptr<ase::gtk::ListItemFactory> m_factory;
+    std::unique_ptr<ase::adp::gtk::ListItemFactory> m_factory;
 
     sigc::slot<void(const std::string&)> m_on_selection_changed;
     sigc::slot<void(const std::string&)> m_on_file_activated;

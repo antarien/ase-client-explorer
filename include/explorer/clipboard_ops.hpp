@@ -24,7 +24,7 @@ namespace ase::explorer::clipboard_ops {
  * absolute path is copied verbatim. anchor is any widget whose display hosts
  * the clipboard (typically the list view).
  */
-void copy_path(ase::gtk::ListView& anchor,
+void copy_path(ase::adp::gtk::ListView& anchor,
                const std::string& path,
                const std::string& root,
                bool relative);

@@ -3,7 +3,7 @@
 /**
  * @file        file_watcher.hpp
  * @brief       Debounced directory change notifier
- * @description Wraps ase::gtk::FileMonitor so the window can react to external
+ * @description Wraps ase::adp::gtk::FileMonitor so the window can react to external
  *              file system changes (files added/removed/renamed underneath the
  *              current root) without manually refreshing. Rapid bursts are
  *              coalesced by the adapter's built-in debounce timer.
@@ -48,7 +48,7 @@ public:
 
 private:
     sigc::slot<void()> m_callback;
-    std::unique_ptr<ase::gtk::FileMonitor> m_monitor;
+    std::unique_ptr<ase::adp::gtk::FileMonitor> m_monitor;
 };
 
 }  // namespace ase::explorer

@@ -46,7 +46,7 @@ namespace ase::explorer::settings_dialog {
  * letting the caller refresh any UI that depends on the now-mutated store
  * (for example the tree view's "extension mapped" indicator dots).
  */
-void show(ase::gtk::ApplicationWindow& parent,
+void show(ase::adp::gtk::ApplicationWindow& parent,
           FileAssociations& associations,
           ExplorerSettings& settings,
           const std::string& root_path,

@@ -28,22 +28,20 @@ namespace ase::explorer {
 
 namespace {
 
-// Anchor under which the breadcrumb starts showing segments. Matches the
-// single-file explorer: everything above this point (/, /mnt, /mnt/code,
-// ... /mnt/code/SRC/GITHUB) is hidden so the first visible segment is
-// always "ase".
-constexpr const char* BREADCRUMB_BASE = "/mnt/code/SRC/GITHUB";
-
 // Split an absolute filesystem path into cumulative segments relative to
-// BREADCRUMB_BASE.
-std::vector<Breadcrumb::Segment> split_segments_impl(const std::string& absolute_path) {
+// the given base. The base is whatever the window passed via set_base()
+// — typically the parent directory of the current project root.
+std::vector<Breadcrumb::Segment> split_segments_impl(
+    const std::string& absolute_path,
+    const std::string& base)
+{
     std::vector<Breadcrumb::Segment> result;
-    if (absolute_path.empty()) return result;
+    if (absolute_path.empty() || base.empty()) return result;
 
-    auto rel = ase::utils::fs::relative_to(absolute_path, BREADCRUMB_BASE);
+    auto rel = ase::utils::fs::relative_to(absolute_path, base);
     if (rel.empty() || rel == ".") return result;
 
-    std::string accumulator(BREADCRUMB_BASE);
+    std::string accumulator(base);
     std::string buffer;
     for (char c : rel) {
         if (c == '/') {
@@ -67,7 +65,7 @@ std::vector<Breadcrumb::Segment> split_segments_impl(const std::string& absolute
 
 }  // namespace
 
-Breadcrumb::Breadcrumb() : m_box(ase::gtk::Box::horizontal(2)) {
+Breadcrumb::Breadcrumb() : m_box(ase::adp::gtk::Box::horizontal(2)) {
     m_box.set_margin_start(8);
     m_box.set_margin_end(8);
     m_box.set_margin_top(8);
@@ -82,6 +80,13 @@ void Breadcrumb::set_max_segments(int n) {
     render();
 }
 
+void Breadcrumb::set_base(const std::string& absolute_base) {
+    if (absolute_base.empty() || absolute_base == m_base) return;
+    m_base = absolute_base;
+    m_focus_offset = 0;
+    render();
+}
+
 void Breadcrumb::update(const std::string& absolute_path) {
     m_current_path = absolute_path;
     m_focus_offset = 0;
@@ -89,7 +94,7 @@ void Breadcrumb::update(const std::string& absolute_path) {
 }
 
 std::vector<Breadcrumb::Segment> Breadcrumb::current_segments() const {
-    return split_segments_impl(m_current_path);
+    return split_segments_impl(m_current_path, m_base);
 }
 
 void Breadcrumb::render() {
@@ -100,7 +105,7 @@ void Breadcrumb::render() {
     const int N = m_max_segments;
 
     auto add_segment_button = [&](const Segment& seg) {
-        auto btn = ase::gtk::Button::create(seg.label);
+        auto btn = ase::adp::gtk::Button::create(seg.label);
         btn.add_css_class("flat");
         btn.add_css_class("dim-label");
         auto target = seg.target_path;
@@ -112,7 +117,7 @@ void Breadcrumb::render() {
     };
 
     auto add_ellipsis_button = [&](int delta) {
-        auto btn = ase::gtk::Button::create("…");
+        auto btn = ase::adp::gtk::Button::create("…");
         btn.add_css_class("flat");
         btn.add_css_class("dim-label");
         btn.set_tooltip_text(delta > 0

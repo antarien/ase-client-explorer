@@ -36,13 +36,16 @@ namespace ase::explorer {
 
 class ExplorerWindow {
 public:
-    explicit ExplorerWindow(ase::gtk::ApplicationWindow window);
+    explicit ExplorerWindow(ase::adp::gtk::ApplicationWindow window);
 
     /** Assemble the full UI: header, breadcrumb, tree, controllers, shortcuts. */
     void build_ui();
 
     /** Load a directory as the new root (triggers tree rebuild + breadcrumb update). */
     void load_root(const std::string& path);
+
+    /** Load whichever root path is persisted in ExplorerSettings. */
+    void load_default_root();
 
     /** Rescan the current root and rebuild the tree without moving. */
     void refresh();
@@ -62,7 +65,7 @@ private:
     void handle_escape_close_search();
     void handle_filter_changed(const std::string& text);
 
-    ase::gtk::ApplicationWindow m_window;
+    ase::adp::gtk::ApplicationWindow m_window;
     std::string m_root_path;
 
     TreeView          m_tree_view;
