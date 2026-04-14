@@ -57,11 +57,32 @@ if(NOT TARGET ase::fileio)
     add_subdirectory(${ASE_FOUNDATION_PATH}/ase-fileio ${CMAKE_BINARY_DIR}/_deps/ase-fileio-build)
 endif()
 
+if(NOT TARGET ase::json)
+    # ase-json is a header-only INTERFACE wrapper around nlohmann_json;
+    # pulling it in standalone requires the nlohmann_json target to exist
+    # first (the parent root-build provides it via FetchContent). Prefer
+    # the system-installed package for the standalone explorer build.
+    if(NOT TARGET nlohmann_json::nlohmann_json)
+        find_package(nlohmann_json QUIET)
+        if(NOT nlohmann_json_FOUND)
+            include(FetchContent)
+            FetchContent_Declare(
+                json
+                GIT_REPOSITORY https://github.com/nlohmann/json.git
+                GIT_TAG v3.11.3
+            )
+            FetchContent_MakeAvailable(json)
+        endif()
+    endif()
+    set(ASE_FOUNDATION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../foundation)
+    add_subdirectory(${ASE_FOUNDATION_PATH}/ase-json ${CMAKE_BINARY_DIR}/_deps/ase-json-build)
+endif()
+
 # ── Adapter dependencies (built standalone if not already in scope) ─────
 
 if(NOT TARGET ase::gtk)
     set(ASE_ADAPTER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../adapter)
-    add_subdirectory(${ASE_ADAPTER_PATH}/ase-gtk-adapter ${CMAKE_BINARY_DIR}/_deps/ase-gtk-adapter-build)
+    add_subdirectory(${ASE_ADAPTER_PATH}/ase-adp-gtk ${CMAKE_BINARY_DIR}/_deps/ase-adp-gtk-build)
 endif()
 
 # ── Desktop Executable ───────────────────────────────────────────────
@@ -84,6 +105,11 @@ add_executable(ase-explorer
     src/context_menu.cpp
     src/keyboard_shortcuts.cpp
     src/settings_dialog.cpp
+    src/file_associations.cpp
+    src/explorer_settings.cpp
+    src/open_with_dialog.cpp
+    src/app_catalog.cpp
+    src/extension_scan.cpp
     src/tree_view.cpp
     src/window.cpp
 )
@@ -100,6 +126,7 @@ target_link_libraries(ase-explorer
         ase::gtk
         ase::utils
         ase::fileio
+        ase::json
 )
 
 set_target_properties(ase-explorer PROPERTIES

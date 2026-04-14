@@ -10,7 +10,7 @@
 
 #include <explorer/clipboard_ops.hpp>
 
-#include <ase/gtk/io.hpp>
+#include <ase/adp/gtk/io.hpp>
 #include <ase/utils/fs.hpp>
 
 namespace ase::explorer::clipboard_ops {

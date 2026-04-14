@@ -19,8 +19,8 @@
 
 #include <explorer/submodule.hpp>
 
-#include <ase/gtk/list_view.hpp>
-#include <ase/gtk/tree.hpp>
+#include <ase/adp/gtk/list_view.hpp>
+#include <ase/adp/gtk/tree.hpp>
 
 #include <gtkmm/multiselection.h>
 #include <glibmm/refptr.h>
@@ -63,6 +63,14 @@ public:
     void activate_selection();
 
     /**
+     * Single-click handler: if the currently-selected row is a folder,
+     * toggle its expansion. Files are intentionally a no-op so that
+     * single-click on a file row only updates the selection — the
+     * dedicated double-click path still launches them.
+     */
+    void toggle_selected_folder();
+
+    /**
      * Recursively expand or collapse the currently-selected row. When expanding,
      * every descendant directory is expanded as well so the whole subtree is
      * visible in one click. Returns true if anything changed.
@@ -91,6 +99,29 @@ public:
             [cb = std::forward<Callback>(callback)](const std::string& path) { cb(path); });
     }
 
+    /**
+     * Install a listener fired when a FILE row is activated (double-click
+     * or Enter). Folder rows still toggle expansion internally. The window
+     * uses this to consult the FileAssociations store and launch the user's
+     * configured handler — there is no implicit Gio fallback.
+     */
+    template <typename Callback>
+    void on_file_activated(Callback&& callback) {
+        m_on_file_activated = sigc::slot<void(const std::string&)>(
+            [cb = std::forward<Callback>(callback)](const std::string& path) { cb(path); });
+    }
+
+    /**
+     * Install a predicate the row factory consults to decide whether to
+     * paint the "extension is mapped" indicator dot next to a file row.
+     * Receives the lowercase extension WITHOUT the leading dot.
+     */
+    template <typename Predicate>
+    void set_extension_mapping_check(Predicate&& predicate) {
+        m_is_extension_mapped = sigc::slot<bool(const std::string&)>(
+            [p = std::forward<Predicate>(predicate)](const std::string& ext) { return p(ext); });
+    }
+
 private:
     std::set<std::string> m_submodule_paths;
     std::unordered_map<std::string, submodule::SubmoduleInfo> m_metadata_cache;
@@ -105,6 +136,8 @@ private:
     std::unique_ptr<ase::gtk::ListItemFactory> m_factory;
 
     sigc::slot<void(const std::string&)> m_on_selection_changed;
+    sigc::slot<void(const std::string&)> m_on_file_activated;
+    sigc::slot<bool(const std::string&)> m_is_extension_mapped;
 };
 
 }  // namespace ase::explorer

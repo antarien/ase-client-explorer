@@ -16,7 +16,7 @@
  * @layer       5
  */
 
-#include <ase/gtk/widget.hpp>
+#include <ase/adp/gtk/widget.hpp>
 
 #include <string>
 

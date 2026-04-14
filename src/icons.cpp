@@ -15,6 +15,8 @@
 
 #include "file-icons.hpp"
 
+#include <gtk/gtk.h>
+
 #include <cctype>
 #include <cstdint>
 
@@ -95,6 +97,38 @@ std::string icon_markup(const ResolvedIcon& icon) {
     return "<span font_family='" + std::string(ICON_FONT) + "' font_size='"
          + std::to_string(ICON_FONT_SIZE * 1024) + "' foreground='" + std::string(color_hex) + "'>"
          + to_utf8(icon.glyph) + "</span>";
+}
+
+std::string glyph_markup(char32_t glyph, uint32_t rgb_color, int point_size) {
+    char color_hex[8];
+    ase::utils::format_hex_rgb(color_hex, sizeof(color_hex),
+        (rgb_color >> 16) & 0xFF,
+        (rgb_color >>  8) & 0xFF,
+         rgb_color        & 0xFF);
+    return "<span font_family='" + std::string(ICON_FONT) + "' font_size='"
+         + std::to_string(point_size * 1024) + "' foreground='" + std::string(color_hex) + "'>"
+         + to_utf8(glyph) + "</span>";
+}
+
+GtkWidget* make_glyph_label(char32_t glyph, uint32_t rgb_color, int point_size) {
+    GtkWidget* label = gtk_label_new(nullptr);
+    const std::string markup = glyph_markup(glyph, rgb_color, point_size);
+    gtk_label_set_markup(GTK_LABEL(label), markup.c_str());
+    gtk_label_set_use_markup(GTK_LABEL(label), TRUE);
+    return label;
+}
+
+GtkWidget* make_glyph_button(char32_t glyph,
+                             uint32_t rgb_color,
+                             int point_size,
+                             const std::string& tooltip)
+{
+    GtkWidget* btn = gtk_button_new();
+    GtkWidget* label = make_glyph_label(glyph, rgb_color, point_size);
+    gtk_button_set_child(GTK_BUTTON(btn), label);
+    gtk_widget_add_css_class(btn, "flat");
+    if (!tooltip.empty()) gtk_widget_set_tooltip_text(btn, tooltip.c_str());
+    return btn;
 }
 
 }  // namespace ase::explorer::icons
