@@ -42,7 +42,7 @@
 
 namespace ase::explorer {
 
-ExplorerWindow::ExplorerWindow(ase::gtk::ApplicationWindow window)
+ExplorerWindow::ExplorerWindow(ase::adp::gtk::ApplicationWindow window)
     : m_window(std::move(window))
 {}
 
@@ -51,12 +51,12 @@ void ExplorerWindow::build_ui() {
     m_window.set_title("ASE Explorer");
 
     // ── Header bar ──
-    auto header = ase::gtk::HeaderBar::create();
+    auto header = ase::adp::gtk::HeaderBar::create();
     header.set_show_title_buttons(false);
 
-    auto title_label = ase::gtk::Label::create("ASE Explorer");
+    auto title_label = ase::adp::gtk::Label::create("ASE Explorer");
     title_label.add_css_class("title");
-    auto empty_title = ase::gtk::Label::create("");
+    auto empty_title = ase::adp::gtk::Label::create("");
     header.set_title_widget(empty_title);
     header.pack_start(title_label);
 
@@ -67,35 +67,41 @@ void ExplorerWindow::build_ui() {
     // (icon-definitions.ts → ui_icons.hpp). gnome-icon-theme symbolic
     // names are FORBIDDEN in this client per INST_ASE_ICO_SYS.md.
     constexpr uint32_t header_glyph_color = ase::colors::TEXT_LIGHT & 0xFFFFFF;
-    auto set_glyph = [](ase::gtk::Button& b, char32_t g) {
+    auto set_glyph = [](ase::adp::gtk::Button& b, char32_t g) {
         GtkWidget* lbl = ase::explorer::icons::make_glyph_label(
             g, header_glyph_color, ase::explorer::icons::ICON_FONT_SIZE);
         gtk_button_set_child(GTK_BUTTON(b.native()->gobj()), lbl);
     };
 
-    auto btn_settings = ase::gtk::Button::create();
+    auto btn_settings = ase::adp::gtk::Button::create();
     set_glyph(btn_settings, ase::ui_icons::ICON_SETTINGS);
     btn_settings.set_tooltip_text("Settings (Ctrl+,)");
     btn_settings.on_clicked([this]() { settings_dialog::show(m_window, m_file_associations, m_settings, m_root_path,
                               [this]() {
                                   m_breadcrumb.set_max_segments(m_settings.breadcrumb_max_segments());
-                                  refresh();
+                                  // If the user changed the default root, jump to it now;
+                                  // otherwise just refresh so newly-mapped extensions show.
+                                  if (m_settings.default_root() != m_root_path) {
+                                      load_root(m_settings.default_root());
+                                  } else {
+                                      refresh();
+                                  }
                               }); });
     header.pack_end(btn_settings);
 
-    auto btn_refresh = ase::gtk::Button::create();
+    auto btn_refresh = ase::adp::gtk::Button::create();
     set_glyph(btn_refresh, ase::ui_icons::ICON_REFRESH);
     btn_refresh.set_tooltip_text("Refresh (F5)");
     btn_refresh.on_clicked([this]() { refresh(); });
     header.pack_end(btn_refresh);
 
-    auto btn_search = ase::gtk::Button::create();
+    auto btn_search = ase::adp::gtk::Button::create();
     set_glyph(btn_search, ase::ui_icons::ICON_SEARCH);
     btn_search.set_tooltip_text("Search (Ctrl+F)");
     btn_search.on_clicked([this]() { handle_search_toggle(); });
     header.pack_end(btn_search);
 
-    auto btn_expand = ase::gtk::Button::create();
+    auto btn_expand = ase::adp::gtk::Button::create();
     set_glyph(btn_expand, ase::ui_icons::ICON_CARET_DOWN);
     btn_expand.set_tooltip_text("Expand / collapse selected item");
     btn_expand.on_clicked([this]() {
@@ -103,12 +109,12 @@ void ExplorerWindow::build_ui() {
     });
     header.pack_end(btn_expand);
 
-    auto btn_copy = ase::gtk::Button::create();
+    auto btn_copy = ase::adp::gtk::Button::create();
     set_glyph(btn_copy, ase::ui_icons::ICON_COPY);
     btn_copy.set_tooltip_text("Copy current path");
     btn_copy.on_clicked([this]() {
         if (!m_root_path.empty()) {
-            ase::gtk::copy_to_clipboard(m_tree_view.list_view(), m_root_path);
+            ase::adp::gtk::copy_to_clipboard(m_tree_view.list_view(), m_root_path);
         }
     });
     header.pack_end(btn_copy);
@@ -116,11 +122,11 @@ void ExplorerWindow::build_ui() {
     m_window.set_titlebar(header);
 
     // ── Main vertical layout: breadcrumb + scrolled tree view ──
-    auto vbox = ase::gtk::Box::vertical(0);
+    auto vbox = ase::adp::gtk::Box::vertical(0);
 
     vbox.append(m_breadcrumb.widget());
 
-    auto scrolled = ase::gtk::ScrolledWindow::create();
+    auto scrolled = ase::adp::gtk::ScrolledWindow::create();
     scrolled.set_vexpand(true);
     scrolled.set_hexpand(true);
     scrolled.set_child(m_tree_view.list_view());
@@ -194,8 +200,8 @@ void ExplorerWindow::build_ui() {
     // use the gesture ONLY for the custom n_press=1 folder-toggle and
     // delegate true row activation (= n_press=2 / Enter) to the canonical
     // GtkListView::activate signal below.
-    auto click = ase::gtk::ClickGesture::create();
-    click.set_button(ase::gtk::MouseButton::Primary);
+    auto click = ase::adp::gtk::ClickGesture::create();
+    click.set_button(ase::adp::gtk::MouseButton::Primary);
     click.on_released([this](int n_press, double, double) {
         if (n_press == 1) m_tree_view.toggle_selected_folder();
     });
@@ -232,8 +238,8 @@ void ExplorerWindow::build_ui() {
     //
     // GTK4-native file DnD via GdkFileList avoids text/uri-list CRLF
     // control-code false positives in terminal sanitiser checks.
-    auto drag_source = ase::gtk::DragSource::create();
-    drag_source.set_actions(ase::gtk::DragAction::Copy);
+    auto drag_source = ase::adp::gtk::DragSource::create();
+    drag_source.set_actions(ase::adp::gtk::DragAction::Copy);
     drag_source.native()->signal_prepare().connect(
         [this](double, double) -> Glib::RefPtr<Gdk::ContentProvider> {
             const std::vector<std::string> paths = m_tree_view.selected_paths();
@@ -286,7 +292,13 @@ void ExplorerWindow::build_ui() {
     m_shortcuts.on_settings         ([this]() { settings_dialog::show(m_window, m_file_associations, m_settings, m_root_path,
                               [this]() {
                                   m_breadcrumb.set_max_segments(m_settings.breadcrumb_max_segments());
-                                  refresh();
+                                  // If the user changed the default root, jump to it now;
+                                  // otherwise just refresh so newly-mapped extensions show.
+                                  if (m_settings.default_root() != m_root_path) {
+                                      load_root(m_settings.default_root());
+                                  } else {
+                                      refresh();
+                                  }
                               }); });
     m_shortcuts.on_toggle_search    ([this]() { handle_search_toggle(); });
     m_shortcuts.on_copy_absolute    ([this]() { handle_copy_path(false); });
@@ -312,9 +324,16 @@ void ExplorerWindow::load_root(const std::string& path) {
 
     m_root_path = resolved;
     m_tree_view.populate(resolved);
+    // Anchor the breadcrumb at the parent of the project root so the first
+    // visible segment is always the project's basename.
+    m_breadcrumb.set_base(ase::utils::fs::parent_of(resolved));
     m_breadcrumb.update(resolved);
     m_file_watcher.start(resolved);
     m_window.set_title("ASE Explorer \u2014 " + ase::utils::fs::filename_of(resolved));
+}
+
+void ExplorerWindow::load_default_root() {
+    load_root(m_settings.default_root());
 }
 
 void ExplorerWindow::refresh() {
@@ -361,7 +380,7 @@ void ExplorerWindow::handle_right_click_open_terminal() {
     auto full = info.get_full_path();
     if (full.empty()) return;
     auto dir = info.is_directory() ? full : ase::utils::fs::parent_of(full);
-    ase::gtk::spawn_command_async("foot --working-directory=" + dir);
+    ase::adp::gtk::spawn_command_async("foot --working-directory=" + dir);
 }
 
 void ExplorerWindow::handle_right_click_reveal() {
@@ -370,8 +389,8 @@ void ExplorerWindow::handle_right_click_reveal() {
     auto full = info.get_full_path();
     if (full.empty()) return;
     auto dir = info.is_directory() ? full : ase::utils::fs::parent_of(full);
-    auto file = ase::gtk::File::create_for_path(dir);
-    auto launcher = ase::gtk::FileLauncher::create(file);
+    auto file = ase::adp::gtk::File::create_for_path(dir);
+    auto launcher = ase::adp::gtk::FileLauncher::create(file);
     launcher.launch(m_tree_view.list_view());
 }
 

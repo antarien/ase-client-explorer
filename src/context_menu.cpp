@@ -25,13 +25,13 @@ namespace {
 // Shared state held by the popover's click gesture - the menu model and the
 // action group both outlive individual click events.
 struct MenuState {
-    ase::gtk::Menu menu = ase::gtk::Menu::create();
-    ase::gtk::ActionGroup actions = ase::gtk::ActionGroup::create();
+    ase::adp::gtk::Menu menu = ase::adp::gtk::Menu::create();
+    ase::adp::gtk::ActionGroup actions = ase::adp::gtk::ActionGroup::create();
 };
 
 }  // namespace
 
-void ContextMenu::build(ase::gtk::ListView& list_view) {
+void ContextMenu::build(ase::adp::gtk::ListView& list_view) {
     auto state = std::make_shared<MenuState>();
 
     state->menu.append("Open",                 "explorer.open");
@@ -57,13 +57,13 @@ void ContextMenu::build(ase::gtk::ListView& list_view) {
     state->actions.add_action("open-terminal", [open_terminal]() { if (open_terminal) open_terminal(); });
     state->actions.add_action("reveal",        [reveal]()        { if (reveal) reveal(); });
 
-    ase::gtk::insert_action_group(list_view, "explorer", state->actions);
+    ase::adp::gtk::insert_action_group(list_view, "explorer", state->actions);
 
-    auto right_click = ase::gtk::ClickGesture::create();
-    right_click.set_button(ase::gtk::MouseButton::Secondary);
-    ase::gtk::ListView* list_ptr = &list_view;
+    auto right_click = ase::adp::gtk::ClickGesture::create();
+    right_click.set_button(ase::adp::gtk::MouseButton::Secondary);
+    ase::adp::gtk::ListView* list_ptr = &list_view;
     right_click.on_released([state, list_ptr](int, double x, double y) {
-        auto popover = ase::gtk::PopoverMenu::create_from_menu(state->menu);
+        auto popover = ase::adp::gtk::PopoverMenu::create_from_menu(state->menu);
         popover.set_parent(*list_ptr);
         popover.set_pointing_to(static_cast<int>(x), static_cast<int>(y), 1, 1);
         popover.popup();

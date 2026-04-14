@@ -14,6 +14,7 @@
  */
 
 #include <filesystem>
+#include <string>
 
 namespace ase::explorer {
 
@@ -25,12 +26,16 @@ public:
     int  breadcrumb_max_segments() const noexcept { return m_breadcrumb_max; }
     void set_breadcrumb_max_segments(int n) noexcept;
 
+    const std::string& default_root() const noexcept { return m_default_root; }
+    void set_default_root(const std::string& path);
+
     const std::filesystem::path& path() const noexcept { return m_path; }
 
 private:
     static std::filesystem::path default_store_path();
 
     int                   m_breadcrumb_max = 5;
+    std::string           m_default_root   = "/mnt/code/SRC/GITHUB/ase";
     std::filesystem::path m_path;
 };
 

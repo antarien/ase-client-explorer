@@ -1,7 +1,7 @@
 /**
  * @file        main.cpp
  * @brief       ASE Project Explorer - entry point and lifecycle hooks
- * @description Pure orchestrator: creates the ase::gtk::Application, installs
+ * @description Pure orchestrator: creates the ase::adp::gtk::Application, installs
  *              the dark Adwaita color scheme and CSS once at startup, and
  *              hands every activate/open event to a freshly-created
  *              ExplorerWindow. No UI logic, no feature code, no file system
@@ -32,8 +32,8 @@
 
 namespace {
 
-std::unique_ptr<ase::explorer::ExplorerWindow> make_window(ase::gtk::Application& app) {
-    auto window = ase::gtk::ApplicationWindow::create(app);
+std::unique_ptr<ase::explorer::ExplorerWindow> make_window(ase::adp::gtk::Application& app) {
+    auto window = ase::adp::gtk::ApplicationWindow::create(app);
     auto explorer_window = std::make_unique<ase::explorer::ExplorerWindow>(std::move(window));
     explorer_window->build_ui();
     return explorer_window;
@@ -48,26 +48,29 @@ std::string resolve_initial_path(const std::vector<std::string>& paths) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-    auto app = ase::gtk::Application::create(
+    auto app = ase::adp::gtk::Application::create(
         "com.antarien.ase.explorer",
-        ase::gtk::Application::Flags::HandlesOpen);
+        ase::adp::gtk::Application::Flags::HandlesOpen);
 
     // Shared slot holding the currently-presented window so the app keeps it
     // alive for its whole lifetime.
     auto current_window = std::make_shared<std::unique_ptr<ase::explorer::ExplorerWindow>>();
 
     app.on_startup([]() {
-        ase::adw::style_manager::init();
-        ase::adw::style_manager::set_color_scheme(ase::adw::ColorScheme::ForceDark);
+        ase::adp::adw::style_manager::init();
+        ase::adp::adw::style_manager::set_color_scheme(ase::adp::adw::ColorScheme::ForceDark);
 
-        auto css = ase::gtk::CssProvider::create();
+        auto css = ase::adp::gtk::CssProvider::create();
         css.load_from_data(ase::explorer::theme::generate_css());
         css.install_for_default_display();
     });
 
     app.on_activate([&app, current_window]() {
         auto win = make_window(app);
-        win->load_root(ase::explorer::DEFAULT_ROOT);
+        // Use the persisted ExplorerSettings.default_root() instead of the
+        // hardcoded fallback constant so the user-configurable root from
+        // ~/.config/ase/explorer/settings.json takes effect on launch.
+        win->load_default_root();
         win->present();
         *current_window = std::move(win);
     });

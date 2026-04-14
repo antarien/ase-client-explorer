@@ -30,7 +30,7 @@ namespace open_with_dialog {
  * Present the dialog. The store is consulted for "always use this" persistence
  * — when the user ticks the checkbox the chosen mapping is written and saved.
  */
-void show(ase::gtk::ApplicationWindow& parent,
+void show(ase::adp::gtk::ApplicationWindow& parent,
           const std::string& file_path,
           FileAssociations& store);
 

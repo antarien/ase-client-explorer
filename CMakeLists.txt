@@ -80,7 +80,7 @@ endif()
 
 # ── Adapter dependencies (built standalone if not already in scope) ─────
 
-if(NOT TARGET ase::gtk)
+if(NOT TARGET ase::adp::gtk)
     set(ASE_ADAPTER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../adapter)
     add_subdirectory(${ASE_ADAPTER_PATH}/ase-adp-gtk ${CMAKE_BINARY_DIR}/_deps/ase-adp-gtk-build)
 endif()
@@ -123,7 +123,7 @@ target_include_directories(ase-explorer
 
 target_link_libraries(ase-explorer
     PRIVATE
-        ase::gtk
+        ase::adp::gtk
         ase::utils
         ase::fileio
         ase::json

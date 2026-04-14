@@ -3,7 +3,7 @@
 /**
  * @file        keyboard_shortcuts.hpp
  * @brief       Window-level keyboard shortcut dispatcher
- * @description Owns an ase::gtk::KeyController with all the explorer's global
+ * @description Owns an ase::adp::gtk::KeyController with all the explorer's global
  *              shortcuts wired to stored slots. The window supplies one slot
  *              per action and calls build() to attach the controller to the
  *              application window.
@@ -76,7 +76,7 @@ public:
     }
 
     /** Build the KeyController and attach it to the application window. */
-    void build(ase::gtk::ApplicationWindow& window);
+    void build(ase::adp::gtk::ApplicationWindow& window);
 
 private:
     sigc::slot<void()> m_on_refresh;

@@ -3,7 +3,7 @@
  * @brief       Implementation for open_with_dialog.hpp
  * @description Pure libadwaita / GTK C API implementation. Builds an AdwWindow
  *              shell directly so the dialog can host a GtkListBox (which the
- *              ase::adw wrapper layer does not yet expose). All state lives in
+ *              ase::adp::adw wrapper layer does not yet expose). All state lives in
  *              a heap-allocated DialogState attached to the window's "destroy"
  *              signal so it is freed exactly when the window goes away.
  *
@@ -164,7 +164,7 @@ void on_window_destroy_cb(GtkWidget*, gpointer user_data) {
 
 }  // namespace
 
-void show(ase::gtk::ApplicationWindow& parent,
+void show(ase::adp::gtk::ApplicationWindow& parent,
           const std::string& file_path,
           FileAssociations& store)
 {

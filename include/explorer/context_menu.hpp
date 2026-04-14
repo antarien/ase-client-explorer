@@ -60,7 +60,7 @@ public:
     }
 
     /** Build the action group + right-click gesture and attach them to list_view. */
-    void build(ase::gtk::ListView& list_view);
+    void build(ase::adp::gtk::ListView& list_view);
 
 private:
     sigc::slot<void()> m_on_open;

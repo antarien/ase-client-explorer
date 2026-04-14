@@ -15,15 +15,15 @@
 namespace ase::explorer {
 
 void FileWatcher::start(const std::string& root_path) {
-    auto file = ase::gtk::File::create_for_path(root_path);
-    auto monitor = ase::gtk::FileMonitor::monitor_directory(file, DEBOUNCE_MS);
+    auto file = ase::adp::gtk::File::create_for_path(root_path);
+    auto monitor = ase::adp::gtk::FileMonitor::monitor_directory(file, DEBOUNCE_MS);
 
     auto slot = m_callback;
     monitor.on_changed([slot]() {
         if (slot) slot();
     });
 
-    m_monitor = std::make_unique<ase::gtk::FileMonitor>(monitor);
+    m_monitor = std::make_unique<ase::adp::gtk::FileMonitor>(monitor);
 }
 
 void FileWatcher::stop() {
