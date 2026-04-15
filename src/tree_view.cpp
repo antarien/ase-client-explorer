@@ -398,6 +398,24 @@ TreeView::TreeView()
 }
 
 void TreeView::populate(const std::string& root_path) {
+    // Snapshot expanded directory paths from the previous model so that a
+    // refresh (F5 / file-watcher / filter change) doesn't collapse the tree
+    // the user is currently working in. Only absolute paths are captured;
+    // depth, selection and scroll are intentionally not restored.
+    std::set<std::string> previously_expanded;
+    if (m_tree_model && m_tree_model->native()) {
+        auto native = m_tree_model->native();
+        unsigned int pos = 0;
+        while (auto row = native->get_row(pos)) {
+            if (row->get_expanded()) {
+                ase::adp::gtk::TreeListRow tree_row(row);
+                auto path = tree_row.get_file_info().get_full_path();
+                if (!path.empty()) previously_expanded.insert(std::move(path));
+            }
+            pos += 1;
+        }
+    }
+
     m_current_root = root_path;
     m_submodule_paths = submodule::parse_gitmodules(root_path);
     m_metadata_cache.clear();
@@ -658,6 +676,27 @@ void TreeView::populate(const std::string& root_path) {
     // set_model was already installed via native() right after creating the
     // MultiSelection above; we only need to attach the factory here.
     m_list_view->set_factory(*m_factory);
+
+    // Re-expand every directory that was open in the previous model. Skipped
+    // when autoexpand is already on (filter active → TreeListModel expands
+    // everything itself). Walks the flattened model forward: because the
+    // sync dir store materialises children in-frame, expanding an ancestor
+    // inserts its children immediately after the current cursor, so the
+    // same linear sweep naturally descends into restored subtrees.
+    if (!autoexpand && !previously_expanded.empty() && m_tree_model && m_tree_model->native()) {
+        auto native = m_tree_model->native();
+        unsigned int pos = 0;
+        while (auto row = native->get_row(pos)) {
+            if (row->is_expandable() && !row->get_expanded()) {
+                ase::adp::gtk::TreeListRow tree_row(row);
+                auto path = tree_row.get_file_info().get_full_path();
+                if (!path.empty() && previously_expanded.count(path) > 0) {
+                    row->set_expanded(true);
+                }
+            }
+            pos += 1;
+        }
+    }
 }
 
 namespace {
