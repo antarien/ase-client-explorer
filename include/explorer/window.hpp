@@ -32,6 +32,8 @@
 
 #include <string>
 
+typedef struct _GtkWidget GtkWidget;
+
 namespace ase::explorer {
 
 class ExplorerWindow {
@@ -65,6 +67,14 @@ private:
     void handle_escape_close_search();
     void handle_filter_changed(const std::string& text);
 
+    /**
+     * Type-ahead search: if a printable key is pressed anywhere in the
+     * main window with no modifier and the search entry is currently
+     * hidden, open the search entry and seed it with that character.
+     * Returns true when the keystroke was consumed.
+     */
+    bool handle_type_ahead(unsigned keyval, unsigned state);
+
     ase::adp::gtk::ApplicationWindow m_window;
     std::string m_root_path;
 
@@ -76,6 +86,12 @@ private:
     FileWatcher       m_file_watcher;
     FileAssociations  m_file_associations = FileAssociations::load();
     ExplorerSettings  m_settings          = ExplorerSettings::load();
+
+    // Raw widget handle to the "ASE Explorer" title label in the header
+    // bar. Owned by the header (managed widget) but stored here so the
+    // search-toggle handler can hide it when the search entry expands to
+    // fill the header.
+    GtkWidget*        m_title_label_native = nullptr;
 };
 
 }  // namespace ase::explorer

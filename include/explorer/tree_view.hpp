@@ -46,6 +46,14 @@ public:
     /** Rebuild the model from root_path; caches submodule metadata internally. */
     void populate(const std::string& root_path);
 
+    /**
+     * Apply a case-insensitive substring filter against file names.
+     * Directories always remain visible (so the user can navigate into
+     * them); only files are filtered. Empty string clears the filter.
+     * Triggers a re-populate of the current root.
+     */
+    void set_filter(const std::string& filter);
+
     /** Returns the FileInfo of the first-selected row, empty if none. */
     ase::adp::gtk::FileInfo selected_file_info() const;
 
@@ -138,6 +146,9 @@ private:
     sigc::slot<void(const std::string&)> m_on_selection_changed;
     sigc::slot<void(const std::string&)> m_on_file_activated;
     sigc::slot<bool(const std::string&)> m_is_extension_mapped;
+
+    std::string m_current_root;  ///< last populate() input, for set_filter re-populate
+    std::string m_filter;        ///< current case-insensitive substring filter
 };
 
 }  // namespace ase::explorer

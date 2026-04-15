@@ -35,6 +35,9 @@
 
 #include <cctype>
 #include <cstring>
+#include <filesystem>
+#include <fnmatch.h>
+#include <system_error>
 #include <new>
 #include <string>
 #include <vector>
@@ -250,7 +253,67 @@ bool is_last_sibling(const Glib::RefPtr<Gtk::TreeListRow>& row,
 // Each FileInfo carries the "standard::file" attribute object (matching
 // what Gtk::DirectoryList does internally) so FileInfo::get_full_path()
 // can extract the absolute path later in the bind callback.
-Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(const std::string& path) {
+// Filter match. Two modes:
+//   - If `filter` contains glob metacharacters (`*`, `?`, `[`), treat it
+//     as an fnmatch pattern (case-insensitive via FNM_CASEFOLD).
+//     `*.cpp` matches `window.cpp`, `test_?.txt` matches `test_a.txt`, etc.
+//   - Otherwise plain case-insensitive substring match.
+//   - Empty needle matches everything.
+bool name_matches_filter(const std::string& name, const std::string& filter) {
+    if (filter.empty()) return true;
+
+    if (filter.find_first_of("*?[") != std::string::npos) {
+        return fnmatch(filter.c_str(), name.c_str(), FNM_CASEFOLD) == 0;
+    }
+
+    if (name.size() < filter.size()) return false;
+    for (size_t i = 0; i + filter.size() <= name.size(); ++i) {
+        bool ok = true;
+        for (size_t j = 0; j < filter.size(); ++j) {
+            char a = std::tolower(static_cast<unsigned char>(name[i + j]));
+            char b = std::tolower(static_cast<unsigned char>(filter[j]));
+            if (a != b) { ok = false; break; }
+        }
+        if (ok) return true;
+    }
+    return false;
+}
+
+// Recursively scan `path` for any file whose name matches the filter.
+// Used to prune directories that contain no matches when a filter is
+// active — without this, the tree shows a forest of empty subdirectories
+// after filtering. Honours exclude::should_exclude so .git, node_modules,
+// etc. are skipped during the scan, matching the visible tree exactly.
+bool dir_has_filter_match(const std::string& path, const std::string& filter) {
+    if (filter.empty()) return true;
+    namespace stdfs = std::filesystem;
+    std::error_code ec;
+    if (!stdfs::is_directory(path, ec)) return false;
+
+    stdfs::recursive_directory_iterator it(path,
+        stdfs::directory_options::skip_permission_denied, ec);
+    stdfs::recursive_directory_iterator end;
+    while (it != end) {
+        const auto& entry = *it;
+        const std::string name = entry.path().filename().string();
+
+        if (exclude::should_exclude(name)) {
+            if (entry.is_directory(ec)) it.disable_recursion_pending();
+            it.increment(ec);
+            continue;
+        }
+        if (entry.is_regular_file(ec)) {
+            if (name_matches_filter(name, filter)) return true;
+        }
+        it.increment(ec);
+    }
+    return false;
+}
+
+Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(
+    const std::string& path,
+    const std::string& filter)
+{
     auto store = Gio::ListStore<Gio::FileInfo>::create();
     auto dir_file = Gio::File::create_for_path(path);
 
@@ -261,6 +324,23 @@ Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(const std::stri
         while (auto info = enumerator->next_file()) {
             const auto name = info->get_name();
             if (exclude::should_exclude(name)) continue;
+
+            // Filter logic when a filter is active:
+            //  - Files: must match the filter (substring).
+            //  - Dirs : must contain at least one matching descendant
+            //           file, otherwise we'd show empty branches that the
+            //           user has to manually click through. dir_has_filter_match
+            //           does a bounded recursive walk via std::filesystem.
+            const bool is_dir = info->get_file_type() == Gio::FileType::DIRECTORY;
+            if (!filter.empty()) {
+                if (is_dir) {
+                    auto child_path = (std::filesystem::path(path) / name).string();
+                    if (!dir_has_filter_match(child_path, filter)) continue;
+                } else {
+                    if (!name_matches_filter(name, filter)) continue;
+                }
+            }
+
             auto child_file = dir_file->get_child(name);
             // Gio::File is an interface, not a concrete GObject subclass in
             // gtkmm's type hierarchy, so the typed set_attribute_object()
@@ -318,27 +398,32 @@ TreeView::TreeView()
 }
 
 void TreeView::populate(const std::string& root_path) {
+    m_current_root = root_path;
     m_submodule_paths = submodule::parse_gitmodules(root_path);
     m_metadata_cache.clear();
 
     // Build the root list synchronously. The resulting Gio::ListStore is
-    // already filtered (exclude list) and sorted (dirs first, alphabetical
-    // case insensitive), so no FilterListModel/SortListModel is needed on
-    // top of it. Synchronous enumeration also means set_expanded() on any
-    // descendant row below makes its children visible to subsequent
-    // get_row() calls in the same call frame - which is what the recursive
-    // expand button relies on.
-    auto root_store = build_sync_dir_store(root_path);
+    // already filtered (exclude list + filename filter) and sorted (dirs
+    // first, alphabetical case insensitive), so no FilterListModel /
+    // SortListModel is needed on top of it. Synchronous enumeration also
+    // means set_expanded() on any descendant row below makes its children
+    // visible to subsequent get_row() calls in the same call frame.
+    const std::string filter_copy = m_filter;  // captured by value into child_creator
+    auto root_store = build_sync_dir_store(root_path, filter_copy);
 
+    // When a filter is active we autoexpand every directory the model
+    // creates, so the user immediately sees the matching files inside
+    // pruned subdirectories without having to click each parent open.
+    const bool autoexpand = !filter_copy.empty();
     auto tree = ase::adp::gtk::TreeListModel::create(
         Glib::RefPtr<Gio::ListModel>(root_store),
         /*passthrough*/ false,
-        /*autoexpand*/  false,
-        [](ase::adp::gtk::FileInfo& info) -> Glib::RefPtr<Gio::ListModel> {
+        /*autoexpand*/  autoexpand,
+        [filter_copy](ase::adp::gtk::FileInfo& info) -> Glib::RefPtr<Gio::ListModel> {
             if (!info.is_directory()) return {};
             auto child_path = info.get_full_path();
             if (child_path.empty()) return {};
-            return build_sync_dir_store(child_path);
+            return build_sync_dir_store(child_path, filter_copy);
         });
 
     m_tree_model = std::make_unique<ase::adp::gtk::TreeListModel>(tree);
@@ -645,6 +730,12 @@ void TreeView::activate_selection() {
     // without an explicit user mapping intentionally do nothing on
     // activation; the user opens them via the context menu's Open With…
     if (m_on_file_activated) m_on_file_activated(full_path);
+}
+
+void TreeView::set_filter(const std::string& filter) {
+    if (filter == m_filter) return;
+    m_filter = filter;
+    if (!m_current_root.empty()) populate(m_current_root);
 }
 
 void TreeView::toggle_selected_folder() {

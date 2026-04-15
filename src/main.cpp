@@ -25,6 +25,8 @@
 #include <ase/adp/gtk/style.hpp>
 #include <ase/utils/fs.hpp>
 
+#include <glib.h>
+
 #include <memory>
 #include <string>
 #include <utility>
@@ -48,6 +50,28 @@ std::string resolve_initial_path(const std::vector<std::string>& paths) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    // ── Make the xdg-desktop-portal-gtk backend eligible on Hyprland ──
+    // The gtk portal's .portal file declares `UseIn=gnome`, so on a pure
+    // Hyprland session it is filtered out and GtkFileDialog has NO
+    // FileChooser portal provider. It then falls back to GTK4's internal
+    // GtkPathBar-based file chooser which has a known box-finalisation
+    // bug that fires `gtk_box_remove: GTK_IS_BOX (box) failed` cascades
+    // when the picker tears down — and no folder picker ever appears.
+    //
+    // Claiming GNOME compatibility makes the backend eligibility check
+    // pass, so the portal launches xdg-desktop-portal-gtk on demand and
+    // serves the file chooser request out of process. The Hyprland
+    // backend stays primary for everything else (screencasts, etc.) via
+    // ~/.config/xdg-desktop-portal/portals.conf.
+    if (const char* current = g_getenv("XDG_CURRENT_DESKTOP");
+        !current || !g_strstr_len(current, -1, "GNOME"))
+    {
+        const std::string composed = current && *current
+            ? std::string(current) + ":GNOME"
+            : std::string("GNOME");
+        g_setenv("XDG_CURRENT_DESKTOP", composed.c_str(), TRUE);
+    }
+
     auto app = ase::adp::gtk::Application::create(
         "com.antarien.ase.explorer",
         ase::adp::gtk::Application::Flags::HandlesOpen);

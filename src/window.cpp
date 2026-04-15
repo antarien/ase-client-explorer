@@ -56,12 +56,16 @@ void ExplorerWindow::build_ui() {
 
     auto title_label = ase::adp::gtk::Label::create("ASE Explorer");
     title_label.add_css_class("title");
-    auto empty_title = ase::adp::gtk::Label::create("");
-    header.set_title_widget(empty_title);
     header.pack_start(title_label);
+    m_title_label_native = title_label.native_widget()
+        ? title_label.native_widget()->gobj() : nullptr;
 
-    // Search entry goes on the start side (hidden until toggled).
-    header.pack_start(m_search_bar.entry());
+    // Search entry sits in the center title slot. Initially invisible
+    // (handled by SearchBar). When the user toggles search on, the title
+    // label hides and the search entry expands to fill the entire header
+    // width — see handle_search_toggle().
+    header.set_title_widget(m_search_bar.entry());
+    m_search_bar.entry().set_hexpand(true);
 
     // Header-bar glyph buttons. Every glyph traces back to the SSOT
     // (icon-definitions.ts → ui_icons.hpp). gnome-icon-theme symbolic
@@ -140,6 +144,13 @@ void ExplorerWindow::build_ui() {
     });
     m_search_bar.entry().on_stop_search([this]() {
         m_search_bar.toggle(false);
+        // Restore the "ASE Explorer" title label that handle_search_toggle
+        // hides when search opens. on_stop_search fires when the user
+        // presses Escape inside the entry — without this restore the
+        // header would stay empty until the search button is clicked again.
+        if (m_title_label_native) {
+            gtk_widget_set_visible(m_title_label_native, TRUE);
+        }
     });
 
     // ── Breadcrumb segment click → navigate in place ──
@@ -310,6 +321,41 @@ void ExplorerWindow::build_ui() {
 
     // ── File watcher ──
     m_file_watcher.on_changed([this]() { refresh(); });
+
+    // ── Escape on the main window: close the application ──
+    // The keyboard_shortcuts module already routes Escape into the search
+    // bar when it's open. When search is closed, Escape falls through to
+    // here and closes the explorer (cascading window close convention).
+    {
+        GtkEventController* esc = gtk_event_controller_key_new();
+        g_signal_connect(esc, "key-pressed",
+            G_CALLBACK(+[](GtkEventControllerKey*, guint keyval, guint,
+                           GdkModifierType, gpointer w) -> gboolean {
+                if (keyval == GDK_KEY_Escape) {
+                    gtk_window_close(GTK_WINDOW(w));
+                    return TRUE;
+                }
+                return FALSE;
+            }), m_window.native()->gobj());
+        gtk_widget_add_controller(GTK_WIDGET(m_window.native()->gobj()), esc);
+    }
+
+    // ── Type-ahead search: any printable keystroke opens the search bar ──
+    // Capture phase so this handler runs BEFORE the tree view's own key
+    // controllers consume the keystroke. Returns TRUE only when we actually
+    // hijack the event, so unrelated keys (arrows, Tab, F5, shortcuts …)
+    // continue to propagate normally.
+    {
+        GtkEventController* type_ahead = gtk_event_controller_key_new();
+        gtk_event_controller_set_propagation_phase(type_ahead, GTK_PHASE_CAPTURE);
+        g_signal_connect(type_ahead, "key-pressed",
+            G_CALLBACK(+[](GtkEventControllerKey*, guint keyval, guint,
+                           GdkModifierType state, gpointer self) -> gboolean {
+                auto* w = static_cast<ExplorerWindow*>(self);
+                return w->handle_type_ahead(keyval, static_cast<unsigned>(state)) ? TRUE : FALSE;
+            }), this);
+        gtk_widget_add_controller(GTK_WIDGET(m_window.native()->gobj()), type_ahead);
+    }
 }
 
 void ExplorerWindow::load_root(const std::string& path) {
@@ -400,21 +446,67 @@ void ExplorerWindow::handle_copy_path(bool relative) {
 }
 
 void ExplorerWindow::handle_search_toggle() {
-    m_search_bar.toggle(!m_search_bar.is_visible());
+    const bool show = !m_search_bar.is_visible();
+    m_search_bar.toggle(show);
+    // Hide the "ASE Explorer" title label when search is active so the
+    // entry fills the header bar end-to-end (between pack_start = empty
+    // and pack_end = button cluster). Restore it when search closes.
+    if (m_title_label_native) {
+        gtk_widget_set_visible(m_title_label_native, !show);
+    }
 }
 
 void ExplorerWindow::handle_escape_close_search() {
     m_search_bar.toggle(false);
+    // Restore the title label that handle_search_toggle hid.
+    if (m_title_label_native) {
+        gtk_widget_set_visible(m_title_label_native, TRUE);
+    }
 }
 
 void ExplorerWindow::handle_filter_changed(const std::string& text) {
-    // Empty filter: reload full tree. Non-empty filter is wired up here;
-    // proper fuzzy filtering lives in a follow-up task (needs a custom
-    // Gtk::Filter on the TreeListModel).
-    if (text.empty()) {
-        refresh();
-    }
-    (void)text;
+    // Forward the filter string to the tree view, which re-populates with
+    // a name-substring match applied to files. Directories always remain
+    // visible so the user can keep navigating into them.
+    m_tree_view.set_filter(text);
+}
+
+bool ExplorerWindow::handle_type_ahead(unsigned keyval, unsigned state) {
+    // Already in search mode → let the entry handle the key normally.
+    if (m_search_bar.is_visible()) return false;
+
+    // Skip when any modifier is held so Ctrl+F, Ctrl+C, F5, Alt+… still
+    // route to their own handlers / shortcuts.
+    constexpr unsigned MODIFIERS =
+        static_cast<unsigned>(GDK_CONTROL_MASK) |
+        static_cast<unsigned>(GDK_ALT_MASK) |
+        static_cast<unsigned>(GDK_SUPER_MASK) |
+        static_cast<unsigned>(GDK_META_MASK);
+    if (state & MODIFIERS) return false;
+
+    // Convert the GDK keyval to a Unicode codepoint. Non-printable keys
+    // (arrows, Enter, Tab, F-keys, Escape …) return 0 or a control char.
+    const gunichar uc = gdk_keyval_to_unicode(keyval);
+    if (uc == 0 || g_unichar_iscntrl(uc)) return false;
+
+    // Open the search bar (this also hides the title label via
+    // handle_search_toggle's wiring).
+    handle_search_toggle();
+
+    // Seed the entry with the typed character.
+    char utf8[8] = {0};
+    const int len = g_unichar_to_utf8(uc, utf8);
+    utf8[len] = '\0';
+    m_search_bar.entry().set_text(utf8);
+
+    // GtkEditable::set_text leaves the cursor at its previous position
+    // (0 for a freshly-shown entry), so subsequent keystrokes would
+    // insert BEFORE the seeded character (typing c, p, p would show
+    // "ppc" instead of "cpp"). Move the cursor to the end explicitly.
+    gtk_editable_set_position(
+        GTK_EDITABLE(m_search_bar.entry().native()->gobj()), -1);
+
+    return true;
 }
 
 }  // namespace ase::explorer

@@ -190,6 +190,19 @@ void show(ase::adp::gtk::ApplicationWindow& parent,
     gtk_window_set_transient_for(GTK_WINDOW(window),
         GTK_WINDOW(parent.native_widget()->gobj()));
 
+    // Escape closes the dialog.
+    GtkEventController* esc = gtk_event_controller_key_new();
+    g_signal_connect(esc, "key-pressed",
+        G_CALLBACK(+[](GtkEventControllerKey*, guint keyval, guint,
+                       GdkModifierType, gpointer w) -> gboolean {
+            if (keyval == GDK_KEY_Escape) {
+                gtk_window_close(GTK_WINDOW(w));
+                return TRUE;
+            }
+            return FALSE;
+        }), window);
+    gtk_widget_add_controller(window, esc);
+
     GtkWidget* toolbar = adw_toolbar_view_new();
 
     GtkWidget* header = adw_header_bar_new();
