@@ -108,6 +108,7 @@ add_executable(ase-explorer
     src/file_associations.cpp
     src/explorer_settings.cpp
     src/open_with_dialog.cpp
+    src/folder_picker.cpp
     src/app_catalog.cpp
     src/extension_scan.cpp
     src/tree_view.cpp
@@ -131,6 +132,7 @@ target_link_libraries(ase-explorer
 
 set_target_properties(ase-explorer PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    ENABLE_EXPORTS ON  # -rdynamic so backtrace_symbols() resolves names
 )
 
 # Installation

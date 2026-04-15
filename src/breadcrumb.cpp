@@ -21,6 +21,8 @@
 #include <ase/adp/gtk/io.hpp>
 #include <ase/utils/fs.hpp>
 
+#include <glib.h>
+
 #include <algorithm>
 #include <vector>
 
@@ -126,7 +128,15 @@ void Breadcrumb::render() {
         btn.on_clicked([this, delta]() {
             m_focus_offset += delta;
             if (m_focus_offset < 0) m_focus_offset = 0;
-            render();
+            // CRITICAL: do NOT call render() inline. render() removes every
+            // child of m_box including the ellipsis button whose handler is
+            // currently executing — that's the GTK_IS_BOX assertion we kept
+            // chasing. Defer to the next idle so the click handler returns
+            // first and GTK finishes its event dispatch before we tear down
+            // the button tree.
+            g_idle_add_once(+[](gpointer self) {
+                static_cast<Breadcrumb*>(self)->render();
+            }, this);
         });
         m_box.append(btn);
     };

@@ -29,6 +29,7 @@
 #include <explorer/explorer_settings.hpp>
 #include <explorer/extension_scan.hpp>
 #include <explorer/file_associations.hpp>
+#include <explorer/folder_picker.hpp>
 #include <explorer/icons.hpp>
 
 #include <ase/adp/adw/adw.hpp>
@@ -151,49 +152,31 @@ struct RootBrowseState {
     ExplorerSettings* settings = nullptr;
 };
 
-// GtkFileDialog::select_folder completion callback. Fires when the user
-// confirms a directory; writes the path back into the entry and persists.
-void on_root_folder_selected_cb(GObject* source, GAsyncResult* res, gpointer user_data) {
-    auto* bs = static_cast<RootBrowseState*>(user_data);
-    GError* err = nullptr;
-    GFile* folder = gtk_file_dialog_select_folder_finish(
-        GTK_FILE_DIALOG(source), res, &err);
-    if (folder) {
-        char* path = g_file_get_path(folder);
-        if (path && bs && bs->entry && bs->settings) {
-            gtk_editable_set_text(GTK_EDITABLE(bs->entry), path);
-            bs->settings->set_default_root(path);
-            bs->settings->save();
-        }
-        if (path) g_free(path);
-        g_object_unref(folder);
-    }
-    if (err) g_error_free(err);
-}
-
-// Browse-button click handler: opens GtkFileDialog::select_folder seeded
-// with the entry's current value as the initial folder.
+// Browse-button click handler. Routes to the in-process folder_picker
+// instead of GtkFileDialog because the latter (a) requires an
+// xdg-desktop-portal FileChooser backend that isn't available on a pure
+// Hyprland session, and (b) when it falls back to its own internal
+// GtkPathBar-based chooser it triggers a known "gtk_box_remove:
+// GTK_IS_BOX (box) failed" cascade and never shows a picker.
+//
+// folder_picker is built from raw GTK4 widgets we control end-to-end.
 void on_browse_root_clicked_cb(GtkButton* btn, gpointer user_data) {
     auto* bs = static_cast<RootBrowseState*>(user_data);
     if (!bs || !bs->entry) return;
 
     GtkRoot* root = gtk_widget_get_root(GTK_WIDGET(btn));
-    GtkWindow* parent = root ? GTK_WINDOW(root) : nullptr;
-
-    GtkFileDialog* dlg = gtk_file_dialog_new();
-    gtk_file_dialog_set_title(dlg, "Choose default root directory");
+    GtkWindow* parent = (root && GTK_IS_WINDOW(root)) ? GTK_WINDOW(root) : nullptr;
 
     const char* current = gtk_editable_get_text(GTK_EDITABLE(bs->entry));
-    if (current && *current) {
-        GFile* initial = g_file_new_for_path(current);
-        gtk_file_dialog_set_initial_folder(dlg, initial);
-        g_object_unref(initial);
-    }
+    const std::string start = current ? std::string(current) : std::string();
 
-    gtk_file_dialog_select_folder(dlg, parent, /*cancellable*/ nullptr,
-        on_root_folder_selected_cb, bs);
-
-    g_object_unref(dlg);
+    folder_picker::show(parent, start,
+        [bs](const std::string& chosen) {
+            if (!bs || !bs->entry || !bs->settings) return;
+            gtk_editable_set_text(GTK_EDITABLE(bs->entry), chosen.c_str());
+            bs->settings->set_default_root(chosen);
+            bs->settings->save();
+        });
 }
 
 GtkWidget* build_display_page(ExplorerSettings& settings) {
@@ -370,8 +353,7 @@ GtkWidget* build_extension_row(const extension_scan::ExtensionCount& ec,
 }
 
 void rebuild_extensions_listbox(CockpitState* state) {
-    if (!state || !state->extensions_listbox
-        || !GTK_IS_LIST_BOX(state->extensions_listbox)) return;
+    if (!state || !state->extensions_listbox) return;
 
     GtkWidget* child = gtk_widget_get_first_child(state->extensions_listbox);
     while (child) {
@@ -454,9 +436,16 @@ GtkWidget* build_chip(const std::string& extension,
             if (!ext || !st->store) return;
             st->store->remove(ext);
             st->store->save();
-            rebuild_extensions_listbox(st);
-            rebuild_chips_strip(st);
-            update_hint(st);
+            // CRITICAL: rebuild_chips_strip would unparent THIS chip while
+            // its child × button's click handler is still on the call
+            // stack. Defer to the next idle so GTK finishes dispatching
+            // this event first; then the chip can be torn down cleanly.
+            g_idle_add_once(+[](gpointer data) {
+                auto* s = static_cast<CockpitState*>(data);
+                rebuild_extensions_listbox(s);
+                rebuild_chips_strip(s);
+                update_hint(s);
+            }, st);
         }), state);
     gtk_box_append(GTK_BOX(chip), remove_btn);
 
@@ -464,11 +453,7 @@ GtkWidget* build_chip(const std::string& extension,
 }
 
 void rebuild_chips_strip(CockpitState* state) {
-    // Defensive: callbacks may fire during dialog teardown when chips_box
-    // has already been destroyed but the raw pointer in state hasn't been
-    // nulled. GTK_IS_BOX validates the GObject type tag and returns false
-    // on a finalized widget, so we bail out cleanly instead of asserting.
-    if (!state || !state->chips_box || !GTK_IS_BOX(state->chips_box)) return;
+    if (!state || !state->chips_box) return;
 
     GtkWidget* child = gtk_widget_get_first_child(state->chips_box);
     while (child) {
@@ -803,6 +788,21 @@ void show(ase::adp::gtk::ApplicationWindow& parent,
     window.set_default_size(CFG_WIDTH, CFG_HEIGHT);
     window.set_transient_for(parent);
     window.set_modal(false);
+
+    // Escape closes the preferences window.
+    {
+        GtkEventController* esc = gtk_event_controller_key_new();
+        g_signal_connect(esc, "key-pressed",
+            G_CALLBACK(+[](GtkEventControllerKey*, guint keyval, guint,
+                           GdkModifierType, gpointer w) -> gboolean {
+                if (keyval == GDK_KEY_Escape) {
+                    gtk_window_close(GTK_WINDOW(w));
+                    return TRUE;
+                }
+                return FALSE;
+            }), window.native());
+        gtk_widget_add_controller(GTK_WIDGET(window.native()), esc);
+    }
 
     auto toolbar = ase::adp::adw::ToolbarView::create();
     auto header  = ase::adp::adw::HeaderBar::create();

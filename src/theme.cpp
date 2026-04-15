@@ -105,6 +105,11 @@ std::string generate_css() {
         "button:hover { background-color: " + surface_4 + "; }\n"
         "entry, searchbar, search > entry { background-color: " + surface_1 + ";"
             " color: " + text_primary + "; border: 1px solid " + border_primary + "; }\n"
+        // Header search entry: smaller font to match the dashboard
+        // .dashboard-filter-search style (font-xs / 10 px).
+        "headerbar searchentry, headerbar searchentry > text,"
+        " headerbar entry, headerbar entry > text {"
+            " font-size: " + fs_xs + "; }\n"
         "scrollbar slider { background-color: " + surface_4 + "; }\n"
         "scrollbar slider:hover { background-color: " + surface_5 + "; }\n"
 
