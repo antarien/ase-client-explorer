@@ -40,6 +40,7 @@ void ContextMenu::build(ase::adp::gtk::ListView& list_view) {
     state->menu.append("Copy Relative Path",   "explorer.copy-rel-path");
     state->menu.append("Open in Terminal",     "explorer.open-terminal");
     state->menu.append("Reveal in File Manager","explorer.reveal");
+    state->menu.append("Delete...",            "explorer.delete");
 
     // Each action forwards to its stored slot; copying the slot into the
     // lambda keeps it valid even if the caller re-binds it later.
@@ -49,6 +50,7 @@ void ContextMenu::build(ase::adp::gtk::ListView& list_view) {
     auto copy_rel_path = m_on_copy_rel_path;
     auto open_terminal = m_on_open_terminal;
     auto reveal        = m_on_reveal;
+    auto del           = m_on_delete;
 
     state->actions.add_action("open",          [open]()          { if (open) open(); });
     state->actions.add_action("open-with",     [open_with]()     { if (open_with) open_with(); });
@@ -56,6 +58,7 @@ void ContextMenu::build(ase::adp::gtk::ListView& list_view) {
     state->actions.add_action("copy-rel-path", [copy_rel_path]() { if (copy_rel_path) copy_rel_path(); });
     state->actions.add_action("open-terminal", [open_terminal]() { if (open_terminal) open_terminal(); });
     state->actions.add_action("reveal",        [reveal]()        { if (reveal) reveal(); });
+    state->actions.add_action("delete",        [del]()           { if (del) del(); });
 
     ase::adp::gtk::insert_action_group(list_view, "explorer", state->actions);
 

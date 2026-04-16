@@ -36,7 +36,9 @@
 #include <gdk/gdk.h>
 #include <gio/gio.h>
 #include <glib.h>
+#include <gtk/gtk.h>
 
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -237,6 +239,7 @@ void ExplorerWindow::build_ui() {
     m_context_menu.on_copy_rel_path([this]() { handle_copy_path(true); });
     m_context_menu.on_open_terminal([this]() { handle_right_click_open_terminal(); });
     m_context_menu.on_reveal       ([this]() { handle_right_click_reveal(); });
+    m_context_menu.on_delete       ([this]() { handle_right_click_delete(); });
     m_context_menu.build(m_tree_view.list_view());
 
     // ── Drag source (drag selected paths into external apps) ──
@@ -438,6 +441,57 @@ void ExplorerWindow::handle_right_click_reveal() {
     auto file = ase::adp::gtk::File::create_for_path(dir);
     auto launcher = ase::adp::gtk::FileLauncher::create(file);
     launcher.launch(m_tree_view.list_view());
+}
+
+// File/folder deletion guarded by a modal confirmation. The alert dialog is
+// the GTK4 native API (AdwMessageDialog is Adwaita-only and the explorer
+// already uses raw gtk_* for its Open-With dialog). The continuation owns the
+// state via unique_ptr so cancellation, confirmation, and error all release
+// it exactly once.
+void ExplorerWindow::handle_right_click_delete() {
+    auto info = m_tree_view.selected_file_info();
+    if (!info.native()) return;
+    auto full = info.get_full_path();
+    if (full.empty()) return;
+    // Refuse to delete the current root — users should close / change root
+    // instead, and blowing away the whole explorer root from a context
+    // click is almost certainly an accident.
+    if (full == m_root_path) return;
+
+    const std::string name  = ase::utils::fs::filename_of(full);
+    const bool        isdir = info.is_directory();
+    const std::string question = isdir
+        ? ("Delete folder \"" + name + "\" and all of its contents?")
+        : ("Delete file \"" + name + "\"?");
+
+    GtkAlertDialog* dialog = gtk_alert_dialog_new("%s", question.c_str());
+    gtk_alert_dialog_set_detail(dialog, "This cannot be undone.");
+    const char* buttons[] = { "Cancel", "Delete", nullptr };
+    gtk_alert_dialog_set_buttons(dialog, buttons);
+    gtk_alert_dialog_set_cancel_button(dialog, 0);
+    gtk_alert_dialog_set_default_button(dialog, 0);
+
+    struct CallbackState {
+        ExplorerWindow* self;
+        std::string     path;
+    };
+    auto state = std::make_unique<CallbackState>(CallbackState{ this, std::move(full) });
+
+    GtkWindow* parent = GTK_WINDOW(m_window.native()->gobj());
+    gtk_alert_dialog_choose(
+        dialog, parent, nullptr,
+        [](GObject* src, GAsyncResult* res, gpointer user_data) {
+            std::unique_ptr<CallbackState> s(static_cast<CallbackState*>(user_data));
+            GError* err = nullptr;
+            int choice = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(src), res, &err);
+            if (err) { g_error_free(err); return; }
+            if (choice == 1) {
+                ase::utils::fs::remove(s->path);
+                s->self->refresh();
+            }
+        },
+        state.release());
+    g_object_unref(dialog);
 }
 
 void ExplorerWindow::handle_copy_path(bool relative) {

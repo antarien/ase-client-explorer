@@ -62,6 +62,7 @@ private:
     void handle_right_click_open_with();
     void handle_right_click_open_terminal();
     void handle_right_click_reveal();
+    void handle_right_click_delete();
     void handle_copy_path(bool relative);
     void handle_search_toggle();
     void handle_escape_close_search();

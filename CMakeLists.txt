@@ -11,7 +11,7 @@ ASE CLIENT BUILD CONFIGURATION
 @layer       5 (Clients)
 @created     2026-04-12
 @modified    2026-04-12
-@version     00.00.01.00001 [stub]
+@version     00.00.01.00001 [seed]
 ]]
 
 # Parse local VERSION if not building from root
