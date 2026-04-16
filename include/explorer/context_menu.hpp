@@ -11,7 +11,7 @@
  *              file operations (double-click, clipboard, terminal, reveal).
  *
  *              Items: Open · Open With... · Copy Path · Copy Relative Path
- *              · Open in Terminal · Reveal in File Manager.
+ *              · Open in Terminal · Reveal in File Manager · Delete...
  *
  * @module      ase-client-explorer
  * @layer       5
@@ -59,6 +59,11 @@ public:
         m_on_reveal = sigc::slot<void()>([fn = std::forward<Callback>(cb)]() { fn(); });
     }
 
+    template <typename Callback>
+    void on_delete(Callback&& cb) {
+        m_on_delete = sigc::slot<void()>([fn = std::forward<Callback>(cb)]() { fn(); });
+    }
+
     /** Build the action group + right-click gesture and attach them to list_view. */
     void build(ase::adp::gtk::ListView& list_view);
 
@@ -69,6 +74,7 @@ private:
     sigc::slot<void()> m_on_copy_rel_path;
     sigc::slot<void()> m_on_open_terminal;
     sigc::slot<void()> m_on_reveal;
+    sigc::slot<void()> m_on_delete;
 };
 
 }  // namespace ase::explorer

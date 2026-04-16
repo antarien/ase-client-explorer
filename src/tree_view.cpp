@@ -20,6 +20,7 @@
 #include <ase/adp/gtk/io.hpp>
 #include <ase/adp/gtk/tree.hpp>
 #include <ase/adp/gtk/widget.hpp>
+#include <ase/utils/fs.hpp>
 #include <ase/utils/strops.hpp>
 
 #include <gtkmm/drawingarea.h>
@@ -34,10 +35,7 @@
 #include <algorithm>
 
 #include <cctype>
-#include <cstring>
-#include <filesystem>
 #include <fnmatch.h>
-#include <system_error>
 #include <new>
 #include <string>
 #include <vector>
@@ -284,28 +282,19 @@ bool name_matches_filter(const std::string& name, const std::string& filter) {
 // active — without this, the tree shows a forest of empty subdirectories
 // after filtering. Honours exclude::should_exclude so .git, node_modules,
 // etc. are skipped during the scan, matching the visible tree exactly.
+// Recursion is hand-rolled on top of ase::utils::fs::list_directory so
+// that std::filesystem stays confined to the foundation layer.
 bool dir_has_filter_match(const std::string& path, const std::string& filter) {
     if (filter.empty()) return true;
-    namespace stdfs = std::filesystem;
-    std::error_code ec;
-    if (!stdfs::is_directory(path, ec)) return false;
+    if (!ase::utils::fs::is_directory(path)) return false;
 
-    stdfs::recursive_directory_iterator it(path,
-        stdfs::directory_options::skip_permission_denied, ec);
-    stdfs::recursive_directory_iterator end;
-    while (it != end) {
-        const auto& entry = *it;
-        const std::string name = entry.path().filename().string();
-
-        if (exclude::should_exclude(name)) {
-            if (entry.is_directory(ec)) it.disable_recursion_pending();
-            it.increment(ec);
-            continue;
+    for (const auto& entry : ase::utils::fs::list_directory(path)) {
+        if (exclude::should_exclude(entry.name)) continue;
+        if (entry.is_directory) {
+            if (dir_has_filter_match(entry.full_path, filter)) return true;
+        } else {
+            if (name_matches_filter(entry.name, filter)) return true;
         }
-        if (entry.is_regular_file(ec)) {
-            if (name_matches_filter(name, filter)) return true;
-        }
-        it.increment(ec);
     }
     return false;
 }
@@ -330,11 +319,11 @@ Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(
             //  - Dirs : must contain at least one matching descendant
             //           file, otherwise we'd show empty branches that the
             //           user has to manually click through. dir_has_filter_match
-            //           does a bounded recursive walk via std::filesystem.
+            //           does a bounded recursive walk via ase::utils::fs.
             const bool is_dir = info->get_file_type() == Gio::FileType::DIRECTORY;
             if (!filter.empty()) {
                 if (is_dir) {
-                    auto child_path = (std::filesystem::path(path) / name).string();
+                    auto child_path = (ase::utils::fs::Path(path) / name).str();
                     if (!dir_has_filter_match(child_path, filter)) continue;
                 } else {
                     if (!name_matches_filter(name, filter)) continue;
@@ -418,7 +407,10 @@ void TreeView::populate(const std::string& root_path) {
 
     m_current_root = root_path;
     m_submodule_paths = submodule::parse_gitmodules(root_path);
-    m_metadata_cache.clear();
+    // Root /VERSION is the SSOT (per WORK_ASE_VERSION_CATALOG.md) — parse it
+    // once per populate() and resolve every submodule up front, so bind()
+    // only does a map lookup and never touches a per-submodule mirror.
+    m_metadata_cache = submodule::parse_root_version(root_path, m_submodule_paths);
 
     // Build the root list synchronously. The resulting Gio::ListStore is
     // already filtered (exclude list + filename filter) and sorted (dirs
@@ -584,8 +576,8 @@ void TreeView::populate(const std::string& root_path) {
         // is_docs takes precedence: a folder literally named "_docs" would
         // otherwise be muted, but the docs-marker conveys more semantic
         // information so we keep it visible in purple.
-        auto contains_ci_substr = [](const std::string& haystack, const char* needle) {
-            const size_t nlen = std::strlen(needle);
+        auto contains_ci_substr = [](const std::string& haystack, const std::string& needle) {
+            const size_t nlen = needle.size();
             if (haystack.size() < nlen) return false;
             for (size_t i = 0; i + nlen <= haystack.size(); ++i) {
                 bool ok = true;
@@ -599,7 +591,7 @@ void TreeView::populate(const std::string& root_path) {
             return false;
         };
 
-        const bool is_docs  = is_dir && contains_ci_substr(name, "docs");
+        const bool is_docs  = is_dir && contains_ci_substr(name, std::string("docs"));
         const bool is_muted = !name.empty() && (name[0] == '.' || name[0] == '_');
 
         if (is_docs) {
@@ -646,13 +638,13 @@ void TreeView::populate(const std::string& root_path) {
         }
 
         if (is_submodule) {
-            auto& cache = *state->metadata_cache;
-            auto cache_it = cache.find(full_path);
-            if (cache_it == cache.end()) {
-                cache_it = cache.emplace(full_path, submodule::parse_version_file(full_path)).first;
-            }
-            const auto& meta = cache_it->second;
-            if (!meta.status.empty()) {
+            // The cache was pre-filled from root /VERSION in populate() —
+            // bind() is a pure lookup here. Absence of a key means the
+            // submodule has no authoritative entry yet (e.g. freshly added,
+            // `ase version scan` not run) → no badge is drawn.
+            auto cache_it = state->metadata_cache->find(full_path);
+            if (cache_it != state->metadata_cache->end() && !cache_it->second.status.empty()) {
+                const auto& meta = cache_it->second;
                 widgets.badge_label.set_markup(build_badge_markup(meta));
                 if (!meta.version.empty()) {
                     widgets.badge_label.set_tooltip_text(
