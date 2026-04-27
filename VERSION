@@ -39,10 +39,10 @@
 #   stable = Production ready (set manually)
 #
 # ==============================================================================
-ASE_CLIENT_EXPLORER=00.00.19.00019
+ASE_CLIENT_EXPLORER=00.00.20.00020
 ASE_CLIENT_EXPLORER_NAME=Project Explorer
 ASE_CLIENT_EXPLORER_DESC=Native GTK4 hierarchical project explorer with NerdFont icons and drag-drop
 ASE_CLIENT_EXPLORER_LAYER=5
 ASE_CLIENT_EXPLORER_STATUS=poc
 ASE_CLIENT_EXPLORER_CREATED=2026-04-12
-ASE_CLIENT_EXPLORER_UPDATED=2026-04-20
+ASE_CLIENT_EXPLORER_UPDATED=2026-04-24
