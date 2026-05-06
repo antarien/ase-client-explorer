@@ -521,7 +521,16 @@ void TreeView::populate(const std::string& root_path) {
     // When a filter is active we autoexpand every directory the model
     // creates, so the user immediately sees the matching files inside
     // pruned subdirectories without having to click each parent open.
-    const bool autoexpand = !filter_copy.empty() || vcs_filter_copy;
+    //
+    // VCS-filter mode is NOT autoexpanded on purpose: with hundreds
+    // of nested submodules each carrying dirty content, recursive
+    // autoexpand forces TreeListModel's child_creator to fire on
+    // every dirty descendant, and each call hits enumerate_children
+    // synchronously on the GTK main thread (filesystem I/O is NOT
+    // O(1) — only the libcuckoo cache lookups are). The aggregate
+    // counters on parent rows already communicate "dirty content
+    // below"; the user clicks to drill down lazily.
+    const bool autoexpand = !filter_copy.empty();
     auto tree = ase::adp::gtk::TreeListModel::create(
         Glib::RefPtr<Gio::ListModel>(root_store),
         /*passthrough*/ false,
