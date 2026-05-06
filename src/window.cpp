@@ -107,6 +107,14 @@ void ExplorerWindow::build_ui() {
     btn_search.on_clicked([this]() { handle_search_toggle(); });
     header.pack_end(btn_search);
 
+    auto btn_git = ase::adp::gtk::Button::create();
+    set_glyph(btn_git, ase::ui_icons::ICON_BRANCH);
+    btn_git.set_tooltip_text("VCS-Filter: nur geänderte Dateien zeigen");
+    btn_git.on_clicked([this]() { handle_vcs_filter_toggle(); });
+    header.pack_end(btn_git);
+    m_btn_git_native = btn_git.native_widget()
+        ? btn_git.native_widget()->gobj() : nullptr;
+
     auto btn_expand = ase::adp::gtk::Button::create();
     set_glyph(btn_expand, ase::ui_icons::ICON_CARET_DOWN);
     btn_expand.set_tooltip_text("Expand / collapse selected item");
@@ -323,7 +331,26 @@ void ExplorerWindow::build_ui() {
     m_shortcuts.build(m_window);
 
     // ── File watcher ──
-    m_file_watcher.on_changed([this]() { refresh(); });
+    // Filesystem changes refresh the tree AND reschedule a VCS rescan.
+    // The scan pool deduplicates pending paths, so a storm of events
+    // collapses to one rescan per repo per cycle.
+    m_file_watcher.on_changed([this]() {
+        refresh();
+        if (!m_root_path.empty()) {
+            m_scan_pool.schedule_full_rescan(m_root_path);
+        }
+    });
+
+    // ── VCS status cache wiring ──
+    m_tree_view.set_status_cache(&m_status_cache);
+    m_status_cache.on_updated().connect(
+        [this]() { handle_status_updated(); });
+
+    // Spawn the scan workers once libgit2 has been initialised by the
+    // m_libgit2 RAII guard (constructed at member-init time, before
+    // build_ui runs). Default thread count = min(hardware_concurrency,
+    // 16) inside ScanPool::start().
+    m_scan_pool.start();
 
     // ── Escape on the main window: close the application ──
     // The keyboard_shortcuts module already routes Escape into the search
@@ -379,6 +406,13 @@ void ExplorerWindow::load_root(const std::string& path) {
     m_breadcrumb.update(resolved);
     m_file_watcher.start(resolved);
     m_window.set_title("ASE Explorer \u2014 " + ase::utils::fs::filename_of(resolved));
+
+    // Reset the VCS status cache and dispatch an initial scan over root
+    // + every nested submodule. Workers stream their results back via
+    // StatusCache::publish_repo, which fires on_updated() on the GTK
+    // main thread; handle_status_updated() repaints visible badges.
+    m_status_cache.set_root(resolved);
+    m_scan_pool.schedule_full_rescan(resolved);
 }
 
 void ExplorerWindow::load_default_root() {
@@ -523,6 +557,42 @@ void ExplorerWindow::handle_filter_changed(const std::string& text) {
     // a name-substring match applied to files. Directories always remain
     // visible so the user can keep navigating into them.
     m_tree_view.set_filter(text);
+}
+
+void ExplorerWindow::handle_vcs_filter_toggle() {
+    m_vcs_filter_active = !m_vcs_filter_active;
+    m_tree_view.set_vcs_filter_active(m_vcs_filter_active);
+
+    // Visual toggled-look: add / remove the "toggled" CSS class so the
+    // theme renders the button with the SURFACE_5_SELECT background.
+    if (m_btn_git_native != nullptr) {
+        if (m_vcs_filter_active) {
+            gtk_widget_add_css_class(m_btn_git_native, "toggled");
+        } else {
+            gtk_widget_remove_css_class(m_btn_git_native, "toggled");
+        }
+    }
+
+    // When activating filter mode, force a fresh scan so the cache is
+    // current — without this, switching on right after a filesystem
+    // change would prune away rows that are actually dirty.
+    if (m_vcs_filter_active && !m_root_path.empty()) {
+        m_scan_pool.schedule_full_rescan(m_root_path);
+    }
+}
+
+void ExplorerWindow::handle_status_updated() {
+    // Fired on the GTK main thread by StatusCache::publish_repo (via
+    // Glib idle). In filter mode, file membership may have changed
+    // (rows appear / disappear) so we have to repopulate. Otherwise
+    // only the badges changed and a queue_draw is enough — visible
+    // rows naturally rebind and pick up the fresh markup.
+    if (m_vcs_filter_active) {
+        refresh();
+    } else {
+        gtk_widget_queue_draw(GTK_WIDGET(
+            m_tree_view.list_view().native()->gobj()));
+    }
 }
 
 bool ExplorerWindow::handle_type_ahead(unsigned keyval, unsigned state) {

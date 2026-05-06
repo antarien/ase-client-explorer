@@ -103,6 +103,10 @@ std::string generate_css() {
             " color: " + text_primary + "; }\n"
         "button { background-color: " + surface_3 + "; color: " + text_primary + "; }\n"
         "button:hover { background-color: " + surface_4 + "; }\n"
+        // .toggled flips the bg to SURFACE_5_SELECT (matches the
+        // viewswitcher:checked pressed-look). Used by the VCS filter
+        // header button to convey active-mode state.
+        "button.toggled, button.toggled:hover { background-color: " + surface_5 + "; }\n"
         "entry, searchbar, search > entry { background-color: " + surface_1 + ";"
             " color: " + text_primary + "; border: 1px solid " + border_primary + "; }\n"
         // Header search entry: smaller font to match the dashboard
