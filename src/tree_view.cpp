@@ -401,61 +401,6 @@ Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(
     return store;
 }
 
-// SSOT colors for VCS file states. Matches ase::colors::PANEL_* tokens
-// (sha-web-styles/src/colors.ts → generated/colors.hpp). Single 1-letter
-// glyph per state in the row's right-aligned column — visually quiet
-// at 200 visible rows yet still readable. Same TEXT_FONT + 9pt size as
-// the submodule [L3 feat] badge so both indicators have identical
-// vertical weight.
-std::string build_vcs_file_badge_markup(ase::explorer::git::FileState s) {
-    using ase::explorer::git::FileState;
-    if (s == FileState::Clean || s == FileState::Ignored) return {};
-
-    const char* glyph = "";
-    const char* color = "";
-    switch (s) {
-        case FileState::Modified:   glyph = "M"; color = "#B8863A"; break;  // PANEL_ORANGE
-        case FileState::Added:      glyph = "A"; color = "#4A8C6A"; break;  // PANEL_GREEN
-        case FileState::Deleted:    glyph = "D"; color = "#A84A4A"; break;  // PANEL_RED
-        case FileState::Renamed:    glyph = "R"; color = "#7A5A9C"; break;  // PANEL_PURPLE
-        case FileState::Untracked:  glyph = "?"; color = "#5A9CB8"; break;  // PANEL_CYAN
-        case FileState::Conflicted: glyph = "U"; color = "#9C8C4A"; break;  // PANEL_YELLOW
-        case FileState::Clean:
-        case FileState::Ignored:    return {};
-    }
-    return std::string("<span font_family='") + icons::TEXT_FONT
-        + "' font_size='" + std::to_string(9 * 1024)
-        + "' foreground='" + color + "'>" + glyph + "</span>";
-}
-
-// Aggregate counter for a directory row, e.g. "M2 ?5". Each category is
-// rendered in its own panel color so the user can at-a-glance read the
-// composition without reading the letters. Empty when the rollup has
-// no dirty entries (caller suppresses the markup entirely).
-std::string build_vcs_dir_badge_markup(const ase::explorer::git::DirRollup& r) {
-    if (!r.any()) return {};
-    auto seg = [](const char* glyph, const char* color, uint32_t n) {
-        if (n == 0) return std::string{};
-        return std::string("<span font_family='") + icons::TEXT_FONT
-             + "' font_size='" + std::to_string(9 * 1024)
-             + "' foreground='" + color + "'>" + glyph
-             + std::to_string(n) + "</span>";
-    };
-    std::string out;
-    auto append = [&out](std::string s) {
-        if (s.empty()) return;
-        if (!out.empty()) out += " ";
-        out += std::move(s);
-    };
-    append(seg("M", "#B8863A", r.modified));
-    append(seg("A", "#4A8C6A", r.added));
-    append(seg("D", "#A84A4A", r.deleted));
-    append(seg("R", "#7A5A9C", r.renamed));
-    append(seg("?", "#5A9CB8", r.untracked));
-    append(seg("U", "#9C8C4A", r.conflicted));
-    return out;
-}
-
 std::string build_badge_markup(const submodule::SubmoduleInfo& meta) {
     char hex[8];
     ase::utils::format_hex_color(hex, sizeof(hex), submodule::status_color(meta.status));
@@ -774,9 +719,9 @@ void TreeView::populate(const std::string& root_path) {
                 // Directory rows (incl. submodule roots) get the
                 // aggregate counter built from cache.dir_rollup().
                 auto rollup = state->status_cache->dir_rollup(full_path);
-                badge_vcs = build_vcs_dir_badge_markup(rollup);
+                badge_vcs = ase::explorer::git::vcs_dir_badge_markup(rollup);
             } else {
-                badge_vcs = build_vcs_file_badge_markup(
+                badge_vcs = ase::explorer::git::vcs_file_badge_markup(
                     state->status_cache->file_state(full_path));
             }
         }

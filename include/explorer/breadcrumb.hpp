@@ -27,6 +27,8 @@
 #include <utility>
 #include <vector>
 
+namespace ase::explorer::git { class StatusCache; }
+
 namespace ase::explorer {
 
 class Breadcrumb {
@@ -63,6 +65,24 @@ public:
     /** Rebuild the bar for a new absolute path. Resets the focus offset. */
     void update(const std::string& absolute_path);
 
+    /**
+     * Install (or clear, with nullptr) the StatusCache the breadcrumb
+     * consults to render per-segment VCS aggregates ("M3 ?5"). Cheap
+     * pointer assignment — call refresh() afterwards (or wait for the
+     * next update()) to repaint with the new cache pointer.
+     */
+    void set_status_cache(const ase::explorer::git::StatusCache* cache) noexcept {
+        m_status_cache = cache;
+    }
+
+    /**
+     * Re-render the bar for the current path WITHOUT resetting the
+     * ellipsis focus offset. Wired to StatusCache::on_updated so the
+     * segment aggregates pick up scan results without disturbing the
+     * user's scroll position into the path.
+     */
+    void refresh();
+
 private:
     void render();
     std::vector<Segment> current_segments() const;
@@ -74,6 +94,7 @@ private:
     std::string m_base = "/mnt/code/SRC/GITHUB";  // initial fallback
     int         m_max_segments = 5;
     int         m_focus_offset = 0;  // shifts the visible middle window
+    const ase::explorer::git::StatusCache* m_status_cache = nullptr;
 };
 
 }  // namespace ase::explorer

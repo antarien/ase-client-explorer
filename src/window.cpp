@@ -343,6 +343,7 @@ void ExplorerWindow::build_ui() {
 
     // ── VCS status cache wiring ──
     m_tree_view.set_status_cache(&m_status_cache);
+    m_breadcrumb.set_status_cache(&m_status_cache);
     m_status_cache.on_updated().connect(
         [this]() { handle_status_updated(); });
 
@@ -593,6 +594,10 @@ void ExplorerWindow::handle_status_updated() {
         gtk_widget_queue_draw(GTK_WIDGET(
             m_tree_view.list_view().native()->gobj()));
     }
+    // Breadcrumb segments need an explicit re-render — they are
+    // GtkButtons with markup children, NOT a row factory that GTK
+    // re-binds on its own.
+    m_breadcrumb.refresh();
 }
 
 bool ExplorerWindow::handle_type_ahead(unsigned keyval, unsigned state) {
