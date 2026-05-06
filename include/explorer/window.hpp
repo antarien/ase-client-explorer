@@ -24,11 +24,14 @@
 #include <explorer/explorer_settings.hpp>
 #include <explorer/file_associations.hpp>
 #include <explorer/file_watcher.hpp>
+#include <explorer/git_scan_pool.hpp>
+#include <explorer/git_status.hpp>
 #include <explorer/keyboard_shortcuts.hpp>
 #include <explorer/search_bar.hpp>
 #include <explorer/tree_view.hpp>
 
 #include <ase/adp/gtk/application.hpp>
+#include <ase/adp/libgit2/init.hpp>
 
 #include <string>
 
@@ -67,6 +70,8 @@ private:
     void handle_search_toggle();
     void handle_escape_close_search();
     void handle_filter_changed(const std::string& text);
+    void handle_vcs_filter_toggle();
+    void handle_status_updated();
 
     /**
      * Type-ahead search: if a printable key is pressed anywhere in the
@@ -78,6 +83,15 @@ private:
 
     ase::adp::gtk::ApplicationWindow m_window;
     std::string m_root_path;
+
+    // libgit2 lives for the lifetime of the explorer window. Init must
+    // happen BEFORE the scan pool is constructed (workers will call
+    // libgit2 from background threads), and shutdown must happen AFTER
+    // the pool joins. Member declaration order ensures both: m_libgit2
+    // is destroyed last, m_scan_pool first.
+    ase::adp::libgit2::Library m_libgit2;
+    git::StatusCache           m_status_cache;
+    git::ScanPool              m_scan_pool{m_status_cache};
 
     TreeView          m_tree_view;
     SearchBar         m_search_bar;
@@ -93,6 +107,11 @@ private:
     // search-toggle handler can hide it when the search entry expands to
     // fill the header.
     GtkWidget*        m_title_label_native = nullptr;
+
+    // Raw handle to the VCS-filter toggle button so handle_vcs_filter_toggle
+    // can flip its CSS class for the pressed-look without re-finding it.
+    GtkWidget*        m_btn_git_native = nullptr;
+    bool              m_vcs_filter_active = false;
 };
 
 }  // namespace ase::explorer

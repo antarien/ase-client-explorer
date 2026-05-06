@@ -20,6 +20,8 @@
 #include <explorer/submodule.hpp>
 
 #include <ase/adp/gtk/list_view.hpp>
+
+namespace ase::explorer::git { class StatusCache; }
 #include <ase/adp/gtk/tree.hpp>
 
 #include <gtkmm/multiselection.h>
@@ -53,6 +55,23 @@ public:
      * Triggers a re-populate of the current root.
      */
     void set_filter(const std::string& filter);
+
+    /**
+     * Install (or clear, with nullptr) the StatusCache the row factory
+     * consults for VCS badges. Cheap pointer assignment — the next
+     * row rebind picks the new cache up. The cache must outlive the
+     * tree view; the explorer window owns both as members.
+     */
+    void set_status_cache(const ase::explorer::git::StatusCache* cache);
+
+    /**
+     * Toggle the "show only VCS-dirty entries" pruning mode. When on,
+     * build_sync_dir_store filters out files whose state is Clean and
+     * directories whose rollup is empty. Triggers a re-populate of
+     * the current root, mirroring set_filter() semantics.
+     */
+    void set_vcs_filter_active(bool active);
+    bool vcs_filter_active() const noexcept { return m_vcs_filter_active; }
 
     /** Returns the FileInfo of the first-selected row, empty if none. */
     ase::adp::gtk::FileInfo selected_file_info() const;
@@ -149,6 +168,8 @@ private:
 
     std::string m_current_root;  ///< last populate() input, for set_filter re-populate
     std::string m_filter;        ///< current case-insensitive substring filter
+    const ase::explorer::git::StatusCache* m_status_cache = nullptr;
+    bool m_vcs_filter_active = false;
 };
 
 }  // namespace ase::explorer

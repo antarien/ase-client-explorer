@@ -85,6 +85,16 @@ if(NOT TARGET ase::adp::gtk)
     add_subdirectory(${ASE_ADAPTER_PATH}/ase-adp-gtk ${CMAKE_BINARY_DIR}/_deps/ase-adp-gtk-build)
 endif()
 
+if(NOT TARGET ase::adp::libgit2)
+    set(ASE_ADAPTER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../adapter)
+    add_subdirectory(${ASE_ADAPTER_PATH}/ase-adp-libgit2 ${CMAKE_BINARY_DIR}/_deps/ase-adp-libgit2-build)
+endif()
+
+if(NOT TARGET ase::adp::libcuckoo)
+    set(ASE_ADAPTER_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../adapter)
+    add_subdirectory(${ASE_ADAPTER_PATH}/ase-adp-libcuckoo ${CMAKE_BINARY_DIR}/_deps/ase-adp-libcuckoo-build)
+endif()
+
 # ── Desktop Executable ───────────────────────────────────────────────
 #
 # SOLID/SSOT layout: main.cpp is a pure orchestrator (~80 lines). Every
@@ -113,6 +123,8 @@ add_executable(ase-explorer
     src/extension_scan.cpp
     src/tree_view.cpp
     src/window.cpp
+    src/git_status.cpp
+    src/git_scan_pool.cpp
 )
 
 target_include_directories(ase-explorer
@@ -125,6 +137,8 @@ target_include_directories(ase-explorer
 target_link_libraries(ase-explorer
     PRIVATE
         ase::adp::gtk
+        ase::adp::libgit2
+        ase::adp::libcuckoo
         ase::utils
         ase::fileio
         ase::json

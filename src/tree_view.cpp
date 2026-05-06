@@ -15,6 +15,7 @@
 #include <explorer/tree_view.hpp>
 
 #include <explorer/exclude.hpp>
+#include <explorer/git_status.hpp>
 #include <explorer/icons.hpp>
 
 #include <ase/adp/gtk/io.hpp>
@@ -175,6 +176,9 @@ struct FactoryState {
     // Predicate from ExplorerWindow that says whether a given file extension
     // is currently mapped in FileAssociations. Empty slot disables the dot.
     const sigc::slot<bool(const std::string&)>* is_extension_mapped = nullptr;
+    // VCS status cache. Read lock-free in the bind hot path. Null means
+    // VCS badges are disabled (e.g. before set_status_cache() is called).
+    const ase::explorer::git::StatusCache* status_cache = nullptr;
 };
 
 // Lowercase the basename's extension without leading dot. Empty if the file
@@ -299,9 +303,34 @@ bool dir_has_filter_match(const std::string& path, const std::string& filter) {
     return false;
 }
 
+// VCS-mode predicate: does the directory tree at `abs_path` contain any
+// dirty entry according to the StatusCache? Pure cache lookup — no
+// recursion needed because dir_rollup() is precomputed transitively at
+// scan time. Empty cache (or path outside any tracked repo) → false.
+bool dir_has_vcs_dirty(const std::string& abs_path,
+                      const ase::explorer::git::StatusCache* cache)
+{
+    return cache != nullptr && cache->dir_has_dirty(abs_path);
+}
+
+// File-row predicate for VCS filter. A file passes if its cached state
+// is anything other than Clean / Ignored. With no cache we fall through
+// to "show everything" so the user is never stranded with an empty tree
+// while the first scan is still in flight.
+bool file_passes_vcs_filter(const std::string& abs_path,
+                            const ase::explorer::git::StatusCache* cache)
+{
+    if (cache == nullptr) return true;
+    using ase::explorer::git::FileState;
+    const FileState s = cache->file_state(abs_path);
+    return s != FileState::Clean && s != FileState::Ignored;
+}
+
 Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(
     const std::string& path,
-    const std::string& filter)
+    const std::string& filter,
+    const ase::explorer::git::StatusCache* cache,
+    bool vcs_filter_active)
 {
     auto store = Gio::ListStore<Gio::FileInfo>::create();
     auto dir_file = Gio::File::create_for_path(path);
@@ -321,12 +350,22 @@ Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(
             //           user has to manually click through. dir_has_filter_match
             //           does a bounded recursive walk via ase::utils::fs.
             const bool is_dir = info->get_file_type() == Gio::FileType::DIRECTORY;
+            const std::string child_path = (ase::utils::fs::Path(path) / name).str();
             if (!filter.empty()) {
                 if (is_dir) {
-                    auto child_path = (ase::utils::fs::Path(path) / name).str();
                     if (!dir_has_filter_match(child_path, filter)) continue;
                 } else {
                     if (!name_matches_filter(name, filter)) continue;
+                }
+            }
+            // VCS filter: layered AFTER the substring filter so the two
+            // can compose (e.g. "show *.cpp that are also dirty"). Cache
+            // lookups are O(1) — see git_status.hpp.
+            if (vcs_filter_active) {
+                if (is_dir) {
+                    if (!dir_has_vcs_dirty(child_path, cache)) continue;
+                } else {
+                    if (!file_passes_vcs_filter(child_path, cache)) continue;
                 }
             }
 
@@ -360,6 +399,61 @@ Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(
         store->append(info);
     }
     return store;
+}
+
+// SSOT colors for VCS file states. Matches ase::colors::PANEL_* tokens
+// (sha-web-styles/src/colors.ts → generated/colors.hpp). Single 1-letter
+// glyph per state in the row's right-aligned column — visually quiet
+// at 200 visible rows yet still readable. Same TEXT_FONT + 9pt size as
+// the submodule [L3 feat] badge so both indicators have identical
+// vertical weight.
+std::string build_vcs_file_badge_markup(ase::explorer::git::FileState s) {
+    using ase::explorer::git::FileState;
+    if (s == FileState::Clean || s == FileState::Ignored) return {};
+
+    const char* glyph = "";
+    const char* color = "";
+    switch (s) {
+        case FileState::Modified:   glyph = "M"; color = "#B8863A"; break;  // PANEL_ORANGE
+        case FileState::Added:      glyph = "A"; color = "#4A8C6A"; break;  // PANEL_GREEN
+        case FileState::Deleted:    glyph = "D"; color = "#A84A4A"; break;  // PANEL_RED
+        case FileState::Renamed:    glyph = "R"; color = "#7A5A9C"; break;  // PANEL_PURPLE
+        case FileState::Untracked:  glyph = "?"; color = "#5A9CB8"; break;  // PANEL_CYAN
+        case FileState::Conflicted: glyph = "U"; color = "#9C8C4A"; break;  // PANEL_YELLOW
+        case FileState::Clean:
+        case FileState::Ignored:    return {};
+    }
+    return std::string("<span font_family='") + icons::TEXT_FONT
+        + "' font_size='" + std::to_string(9 * 1024)
+        + "' foreground='" + color + "'>" + glyph + "</span>";
+}
+
+// Aggregate counter for a directory row, e.g. "M2 ?5". Each category is
+// rendered in its own panel color so the user can at-a-glance read the
+// composition without reading the letters. Empty when the rollup has
+// no dirty entries (caller suppresses the markup entirely).
+std::string build_vcs_dir_badge_markup(const ase::explorer::git::DirRollup& r) {
+    if (!r.any()) return {};
+    auto seg = [](const char* glyph, const char* color, uint32_t n) {
+        if (n == 0) return std::string{};
+        return std::string("<span font_family='") + icons::TEXT_FONT
+             + "' font_size='" + std::to_string(9 * 1024)
+             + "' foreground='" + color + "'>" + glyph
+             + std::to_string(n) + "</span>";
+    };
+    std::string out;
+    auto append = [&out](std::string s) {
+        if (s.empty()) return;
+        if (!out.empty()) out += " ";
+        out += std::move(s);
+    };
+    append(seg("M", "#B8863A", r.modified));
+    append(seg("A", "#4A8C6A", r.added));
+    append(seg("D", "#A84A4A", r.deleted));
+    append(seg("R", "#7A5A9C", r.renamed));
+    append(seg("?", "#5A9CB8", r.untracked));
+    append(seg("U", "#9C8C4A", r.conflicted));
+    return out;
 }
 
 std::string build_badge_markup(const submodule::SubmoduleInfo& meta) {
@@ -419,21 +513,26 @@ void TreeView::populate(const std::string& root_path) {
     // means set_expanded() on any descendant row below makes its children
     // visible to subsequent get_row() calls in the same call frame.
     const std::string filter_copy = m_filter;  // captured by value into child_creator
-    auto root_store = build_sync_dir_store(root_path, filter_copy);
+    const bool vcs_filter_copy   = m_vcs_filter_active;
+    const auto* cache_copy       = m_status_cache;
+    auto root_store = build_sync_dir_store(root_path, filter_copy,
+                                           cache_copy, vcs_filter_copy);
 
     // When a filter is active we autoexpand every directory the model
     // creates, so the user immediately sees the matching files inside
     // pruned subdirectories without having to click each parent open.
-    const bool autoexpand = !filter_copy.empty();
+    const bool autoexpand = !filter_copy.empty() || vcs_filter_copy;
     auto tree = ase::adp::gtk::TreeListModel::create(
         Glib::RefPtr<Gio::ListModel>(root_store),
         /*passthrough*/ false,
         /*autoexpand*/  autoexpand,
-        [filter_copy](ase::adp::gtk::FileInfo& info) -> Glib::RefPtr<Gio::ListModel> {
+        [filter_copy, cache_copy, vcs_filter_copy](
+                ase::adp::gtk::FileInfo& info) -> Glib::RefPtr<Gio::ListModel> {
             if (!info.is_directory()) return {};
             auto child_path = info.get_full_path();
             if (child_path.empty()) return {};
-            return build_sync_dir_store(child_path, filter_copy);
+            return build_sync_dir_store(child_path, filter_copy,
+                                        cache_copy, vcs_filter_copy);
         });
 
     m_tree_model = std::make_unique<ase::adp::gtk::TreeListModel>(tree);
@@ -459,6 +558,7 @@ void TreeView::populate(const std::string& root_path) {
     state->metadata_cache = &m_metadata_cache;
     state->root_model = root_store;
     state->is_extension_mapped = &m_is_extension_mapped;
+    state->status_cache = m_status_cache;
 
     auto factory = ase::adp::gtk::ListItemFactory::create();
 
@@ -637,27 +737,51 @@ void TreeView::populate(const std::string& root_path) {
             widgets.mapping_dot.set_tooltip_text("");
         }
 
+        // ── Right-aligned badge column ──
+        // Composed of TWO independent indicators that share a single
+        // Pango markup string:
+        //   1. Submodule status     [L3 feat]   — only on submodule rows
+        //   2. VCS file/dir status  M3 ?5 / M / ?  — when StatusCache has data
+        // Either, both, or neither may render. When both are present, the
+        // submodule badge prints first (left side of the column) and the
+        // VCS aggregate trails it on the right.
+        std::string badge_left;
+        std::string badge_tip;
+
         if (is_submodule) {
-            // The cache was pre-filled from root /VERSION in populate() —
-            // bind() is a pure lookup here. Absence of a key means the
-            // submodule has no authoritative entry yet (e.g. freshly added,
-            // `ase version scan` not run) → no badge is drawn.
             auto cache_it = state->metadata_cache->find(full_path);
             if (cache_it != state->metadata_cache->end() && !cache_it->second.status.empty()) {
                 const auto& meta = cache_it->second;
-                widgets.badge_label.set_markup(build_badge_markup(meta));
+                badge_left = build_badge_markup(meta);
                 if (!meta.version.empty()) {
-                    widgets.badge_label.set_tooltip_text(
-                        name + " v" + meta.version + " [" + meta.status + "]");
+                    badge_tip = name + " v" + meta.version + " [" + meta.status + "]";
                 }
-            } else {
-                widgets.badge_label.set_markup("");
-                widgets.badge_label.set_tooltip_text("");
             }
+        }
+
+        std::string badge_vcs;
+        if (state->status_cache != nullptr) {
+            if (is_dir) {
+                // Directory rows (incl. submodule roots) get the
+                // aggregate counter built from cache.dir_rollup().
+                auto rollup = state->status_cache->dir_rollup(full_path);
+                badge_vcs = build_vcs_dir_badge_markup(rollup);
+            } else {
+                badge_vcs = build_vcs_file_badge_markup(
+                    state->status_cache->file_state(full_path));
+            }
+        }
+
+        if (!badge_left.empty() && !badge_vcs.empty()) {
+            widgets.badge_label.set_markup(badge_left + " " + badge_vcs);
+        } else if (!badge_left.empty()) {
+            widgets.badge_label.set_markup(badge_left);
+        } else if (!badge_vcs.empty()) {
+            widgets.badge_label.set_markup(badge_vcs);
         } else {
             widgets.badge_label.set_markup("");
-            widgets.badge_label.set_tooltip_text("");
         }
+        widgets.badge_label.set_tooltip_text(badge_tip);
     });
 
     factory.on_teardown([state](ase::adp::gtk::ListItem& item) {
@@ -766,6 +890,19 @@ void TreeView::activate_selection() {
 void TreeView::set_filter(const std::string& filter) {
     if (filter == m_filter) return;
     m_filter = filter;
+    if (!m_current_root.empty()) populate(m_current_root);
+}
+
+void TreeView::set_status_cache(const ase::explorer::git::StatusCache* cache) {
+    // Cheap pointer assignment — the next bind() automatically reads
+    // from the new cache. No repopulate needed; the caller does that
+    // after the first scan completes (via window's on_updated handler).
+    m_status_cache = cache;
+}
+
+void TreeView::set_vcs_filter_active(bool active) {
+    if (active == m_vcs_filter_active) return;
+    m_vcs_filter_active = active;
     if (!m_current_root.empty()) populate(m_current_root);
 }
 
