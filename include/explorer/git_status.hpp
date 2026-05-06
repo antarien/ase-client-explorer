@@ -175,4 +175,16 @@ private:
     sigc::signal<void()> m_on_updated;
 };
 
+// ── Pango-markup helpers shared by every consumer that displays a
+//    file or directory together with its VCS state (tree rows,
+//    breadcrumb segments, future tooltips). The exact glyphs +
+//    panel colours are defined in git_status.cpp so SSOT updates
+//    propagate to every consumer at once.
+
+/** 1-letter Pango span for the file's primary state, "" when Clean/Ignored. */
+std::string vcs_file_badge_markup(FileState s);
+
+/** "M3 A1 ?5" Pango spans (per-category panel colour), "" when empty. */
+std::string vcs_dir_badge_markup(const DirRollup& r);
+
 }  // namespace ase::explorer::git

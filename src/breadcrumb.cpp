@@ -18,9 +18,13 @@
 
 #include <explorer/breadcrumb.hpp>
 
+#include <explorer/git_status.hpp>
+
 #include <ase/adp/gtk/io.hpp>
 #include <ase/utils/fs.hpp>
 
+#include <glibmm/markup.h>
+#include <gtk/gtk.h>
 #include <glib.h>
 
 #include <algorithm>
@@ -95,6 +99,13 @@ void Breadcrumb::update(const std::string& absolute_path) {
     render();
 }
 
+void Breadcrumb::refresh() {
+    // Preserves m_focus_offset so a status update doesn't snap the
+    // user back to the tail end if they scrolled into hidden middle
+    // segments via the ellipsis buttons.
+    render();
+}
+
 std::vector<Breadcrumb::Segment> Breadcrumb::current_segments() const {
     return split_segments_impl(m_current_path, m_base);
 }
@@ -110,6 +121,27 @@ void Breadcrumb::render() {
         auto btn = ase::adp::gtk::Button::create(seg.label);
         btn.add_css_class("flat");
         btn.add_css_class("dim-label");
+
+        // VCS aggregate next to the label when a StatusCache is wired
+        // and the segment's path has dirty content. Replaces the
+        // button's plain-text child with a markup-capable Label so
+        // the panel-coloured M / A / D / ? / R / U glyphs render in
+        // their own colours. dir_rollup() already includes cross-repo
+        // contributions from nested submodules.
+        if (m_status_cache != nullptr) {
+            const auto rollup = m_status_cache->dir_rollup(seg.target_path);
+            const std::string vcs = git::vcs_dir_badge_markup(rollup);
+            if (!vcs.empty()) {
+                std::string markup =
+                    Glib::Markup::escape_text(seg.label).raw() + "  " + vcs;
+                auto lbl = ase::adp::gtk::Label::create("");
+                lbl.set_markup(markup);
+                gtk_button_set_child(
+                    GTK_BUTTON(btn.native_widget()->gobj()),
+                    GTK_WIDGET(lbl.native_widget()->gobj()));
+            }
+        }
+
         auto target = seg.target_path;
         auto slot = m_on_segment_clicked;
         btn.on_clicked([slot, target]() {

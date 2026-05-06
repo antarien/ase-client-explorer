@@ -28,10 +28,13 @@
 
 #include <explorer/git_status.hpp>
 
+#include <explorer/icons.hpp>
+
 #include <ase/adp/libcuckoo/map.hpp>
 
 #include <glibmm/main.h>
 
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -273,6 +276,56 @@ void StatusCache::publish_repo(
     // ── 6. Fire on_updated on the GTK main thread ─────────────────
     auto* sig = &m_on_updated;
     Glib::signal_idle().connect_once([sig]() { sig->emit(); });
+}
+
+// ── SSOT colours for VCS file states. Match ase::colors::PANEL_*
+//    tokens (sha-web-styles/src/colors.ts → generated/colors.hpp).
+//    Single 1-letter glyph per state + same TEXT_FONT + 9pt size as
+//    the submodule [L3 feat] badge so both row markers carry equal
+//    visual weight.
+
+std::string vcs_file_badge_markup(FileState s) {
+    if (s == FileState::Clean || s == FileState::Ignored) return {};
+
+    const char* glyph = "";
+    const char* color = "";
+    switch (s) {
+        case FileState::Modified:   glyph = "M"; color = "#B8863A"; break;  // PANEL_ORANGE
+        case FileState::Added:      glyph = "A"; color = "#4A8C6A"; break;  // PANEL_GREEN
+        case FileState::Deleted:    glyph = "D"; color = "#A84A4A"; break;  // PANEL_RED
+        case FileState::Renamed:    glyph = "R"; color = "#7A5A9C"; break;  // PANEL_PURPLE
+        case FileState::Untracked:  glyph = "?"; color = "#5A9CB8"; break;  // PANEL_CYAN
+        case FileState::Conflicted: glyph = "U"; color = "#9C8C4A"; break;  // PANEL_YELLOW
+        case FileState::Clean:
+        case FileState::Ignored:    return {};
+    }
+    return std::string("<span font_family='") + icons::TEXT_FONT
+        + "' font_size='" + std::to_string(9 * 1024)
+        + "' foreground='" + color + "'>" + glyph + "</span>";
+}
+
+std::string vcs_dir_badge_markup(const DirRollup& r) {
+    if (!r.any()) return {};
+    auto seg = [](const char* glyph, const char* color, uint32_t n) {
+        if (n == 0) return std::string{};
+        return std::string("<span font_family='") + icons::TEXT_FONT
+             + "' font_size='" + std::to_string(9 * 1024)
+             + "' foreground='" + color + "'>" + glyph
+             + std::to_string(n) + "</span>";
+    };
+    std::string out;
+    auto append = [&out](std::string s) {
+        if (s.empty()) return;
+        if (!out.empty()) out += " ";
+        out += std::move(s);
+    };
+    append(seg("M", "#B8863A", r.modified));    // PANEL_ORANGE
+    append(seg("A", "#4A8C6A", r.added));       // PANEL_GREEN
+    append(seg("D", "#A84A4A", r.deleted));     // PANEL_RED
+    append(seg("R", "#7A5A9C", r.renamed));     // PANEL_PURPLE
+    append(seg("?", "#5A9CB8", r.untracked));   // PANEL_CYAN
+    append(seg("U", "#9C8C4A", r.conflicted));  // PANEL_YELLOW
+    return out;
 }
 
 }  // namespace ase::explorer::git
