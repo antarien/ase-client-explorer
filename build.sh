@@ -32,6 +32,17 @@ else
     section_spin() { local lbl="$1"; shift; local out; out=$("$@" 2>&1); SPIN_EXIT=$?; SPIN_OUT="$out"; }
 fi
 
+# Brand icon sync — Down→Top: rsync from sha-web-resources/generated/ase/ (Layer 0 SSOT)
+# into packaging/icons/ (committed, AUR-buildable). Diff after sync = signal to commit.
+_BRAND_SRC="$(dirname "${BASH_SOURCE[0]}")/../sha-client-web/sha-web-resources/generated/ase"
+_BRAND_DST="$(dirname "${BASH_SOURCE[0]}")/packaging/icons"
+if [ -d "$_BRAND_SRC" ]; then
+    mkdir -p "$_BRAND_DST"
+    for _size in 16 32 48 192 512; do
+        rsync -a "$_BRAND_SRC/icon-${_size}.png" "$_BRAND_DST/icon-${_size}.png" 2>/dev/null
+    done
+fi
+
 # CPU/IO priority: keep system responsive during builds
 # Reserve 2 cores for desktop/browser (minimum 2 build threads)
 BUILD_JOBS=$(( $(nproc) - 2 ))
