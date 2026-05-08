@@ -63,6 +63,20 @@ public:
     /** Rebuild the bar for a new absolute path. Resets the focus offset. */
     void update(const std::string& absolute_path);
 
+    /**
+     * True if `path` is a strict ancestor of the breadcrumb's current
+     * deeper path (path/something is a prefix of m_current_path).
+     */
+    bool is_ancestor_of_current(const std::string& path) const;
+
+    /**
+     * Shift the visible truncation window so that the segment whose
+     * target_path equals `path` is inside the middle visible range.
+     * Does NOT change m_current_path. No-op if path is not part of
+     * the current breadcrumb segments.
+     */
+    void shift_focus_to(const std::string& path);
+
 private:
     void render();
     std::vector<Segment> current_segments() const;

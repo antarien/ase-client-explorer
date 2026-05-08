@@ -211,7 +211,17 @@ void ExplorerWindow::build_ui() {
         const std::string dir = ase::utils::fs::is_directory(selected)
             ? selected
             : ase::utils::fs::parent_of(selected);
-        m_breadcrumb.update(dir.empty() ? m_root_path : dir);
+        const std::string target = dir.empty() ? m_root_path : dir;
+        if (m_breadcrumb.is_ancestor_of_current(target)) {
+            // Click landed on an ancestor of the deeper visited path —
+            // keep the longer breadcrumb path, just shift the visible
+            // window so the clicked ancestor lands inside it.
+            m_breadcrumb.shift_focus_to(target);
+        } else {
+            // Selection at-or-deeper, or in a different branch — extend
+            // / replace the breadcrumb path to match the new selection.
+            m_breadcrumb.update(target);
+        }
     });
 
     // ── Single-click gesture: toggle folders anywhere on the row ──

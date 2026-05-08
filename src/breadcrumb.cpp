@@ -95,6 +95,38 @@ void Breadcrumb::update(const std::string& absolute_path) {
     render();
 }
 
+bool Breadcrumb::is_ancestor_of_current(const std::string& path) const {
+    if (path.empty() || m_current_path.empty()) return false;
+    if (path.size() >= m_current_path.size()) return false;
+    if (m_current_path.compare(0, path.size(), path) != 0) return false;
+    return m_current_path[path.size()] == '/';
+}
+
+void Breadcrumb::shift_focus_to(const std::string& target_path) {
+    const auto segments = current_segments();
+    const int M = static_cast<int>(segments.size());
+    if (M == 0) return;
+
+    int target_idx = -1;
+    for (int i = 0; i < M; ++i) {
+        if (segments[i].target_path == target_path) { target_idx = i; break; }
+    }
+    if (target_idx < 0) return;
+
+    // First and last cells are always visible without truncation —
+    // no offset adjustment needed.
+    if (target_idx == 0 || target_idx == M - 1) { render(); return; }
+
+    // Center the target inside the middle window. Window covers
+    // indices [M-1-middle_cells-offset, M-1-offset). Solve for
+    // offset that puts target_idx near the centre.
+    const int middle_cells = m_max_segments - 2;
+    int desired = (M - 1) - target_idx - (middle_cells / 2);
+    if (desired < 0) desired = 0;
+    m_focus_offset = desired;
+    render();
+}
+
 std::vector<Breadcrumb::Segment> Breadcrumb::current_segments() const {
     return split_segments_impl(m_current_path, m_base);
 }
