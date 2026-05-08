@@ -18,13 +18,9 @@
 
 #include <explorer/breadcrumb.hpp>
 
-#include <explorer/git_status.hpp>
-
 #include <ase/adp/gtk/io.hpp>
 #include <ase/utils/fs.hpp>
 
-#include <glibmm/markup.h>
-#include <gtk/gtk.h>
 #include <glib.h>
 
 #include <algorithm>
@@ -99,13 +95,6 @@ void Breadcrumb::update(const std::string& absolute_path) {
     render();
 }
 
-void Breadcrumb::refresh() {
-    // Preserves m_focus_offset so a status update doesn't snap the
-    // user back to the tail end if they scrolled into hidden middle
-    // segments via the ellipsis buttons.
-    render();
-}
-
 std::vector<Breadcrumb::Segment> Breadcrumb::current_segments() const {
     return split_segments_impl(m_current_path, m_base);
 }
@@ -121,21 +110,6 @@ void Breadcrumb::render() {
         auto btn = ase::adp::gtk::Button::create(seg.label);
         btn.add_css_class("flat");
         btn.add_css_class("dim-label");
-
-        if (m_status_cache != nullptr) {
-            const auto rollup = m_status_cache->dir_rollup(seg.target_path);
-            const std::string vcs = git::vcs_dir_badge_markup(rollup);
-            if (!vcs.empty()) {
-                std::string markup =
-                    Glib::Markup::escape_text(seg.label).raw() + "  " + vcs;
-                GtkWidget* child = gtk_button_get_child(
-                    GTK_BUTTON(btn.native_widget()->gobj()));
-                if (GTK_IS_LABEL(child)) {
-                    gtk_label_set_use_markup(GTK_LABEL(child), TRUE);
-                    gtk_label_set_markup(GTK_LABEL(child), markup.c_str());
-                }
-            }
-        }
 
         auto target = seg.target_path;
         auto slot = m_on_segment_clicked;

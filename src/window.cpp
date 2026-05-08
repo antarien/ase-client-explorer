@@ -343,7 +343,6 @@ void ExplorerWindow::build_ui() {
 
     // ── VCS status cache wiring ──
     m_tree_view.set_status_cache(&m_status_cache);
-    m_breadcrumb.set_status_cache(&m_status_cache);
     m_status_cache.on_updated().connect(
         [this]() { handle_status_updated(); });
 
@@ -594,10 +593,15 @@ void ExplorerWindow::handle_status_updated() {
         gtk_widget_queue_draw(GTK_WIDGET(
             m_tree_view.list_view().native()->gobj()));
     }
-    // Breadcrumb segments need an explicit re-render — they are
-    // GtkButtons with markup children, NOT a row factory that GTK
-    // re-binds on its own.
-    m_breadcrumb.refresh();
+    // The breadcrumb is intentionally NOT refreshed here. on_updated
+    // emits once per repo publish — with hundreds of nested submodules
+    // that is hundreds of emits during an initial scan. Re-rendering
+    // the breadcrumb on every emit tears its segment buttons down and
+    // rebuilds them in rapid succession, so any user click that lands
+    // mid-cycle falls through to the tree view underneath and is
+    // misinterpreted as a row toggle. Breadcrumb VCS aggregates pick
+    // up the latest cache state on the next natural render trigger
+    // (selection change, load_root, set_max_segments).
 }
 
 bool ExplorerWindow::handle_type_ahead(unsigned keyval, unsigned state) {
