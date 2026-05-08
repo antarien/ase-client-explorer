@@ -122,23 +122,18 @@ void Breadcrumb::render() {
         btn.add_css_class("flat");
         btn.add_css_class("dim-label");
 
-        // VCS aggregate next to the label when a StatusCache is wired
-        // and the segment's path has dirty content. Replaces the
-        // button's plain-text child with a markup-capable Label so
-        // the panel-coloured M / A / D / ? / R / U glyphs render in
-        // their own colours. dir_rollup() already includes cross-repo
-        // contributions from nested submodules.
         if (m_status_cache != nullptr) {
             const auto rollup = m_status_cache->dir_rollup(seg.target_path);
             const std::string vcs = git::vcs_dir_badge_markup(rollup);
             if (!vcs.empty()) {
                 std::string markup =
                     Glib::Markup::escape_text(seg.label).raw() + "  " + vcs;
-                auto lbl = ase::adp::gtk::Label::create("");
-                lbl.set_markup(markup);
-                gtk_button_set_child(
-                    GTK_BUTTON(btn.native_widget()->gobj()),
-                    GTK_WIDGET(lbl.native_widget()->gobj()));
+                GtkWidget* child = gtk_button_get_child(
+                    GTK_BUTTON(btn.native_widget()->gobj()));
+                if (GTK_IS_LABEL(child)) {
+                    gtk_label_set_use_markup(GTK_LABEL(child), TRUE);
+                    gtk_label_set_markup(GTK_LABEL(child), markup.c_str());
+                }
             }
         }
 
