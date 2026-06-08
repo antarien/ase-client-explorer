@@ -14,8 +14,9 @@
  * @layer       5
  */
 
+#include <ase/containers/vector.hpp>
+
 #include <string>
-#include <vector>
 
 namespace ase::explorer {
 
@@ -29,10 +30,10 @@ struct AppEntry {
 namespace app_catalog {
 
 /** Snapshot every installed XDG application sorted by display name. */
-std::vector<AppEntry> all();
+ase::containers::Vector<AppEntry> all();
 
 /** Snapshot applications that declared the given MIME type as a handler. */
-std::vector<AppEntry> for_mime_type(const std::string& mime);
+ase::containers::Vector<AppEntry> for_mime_type(const std::string& mime);
 
 /** Probe the MIME type of a file path; empty if it cannot be determined. */
 std::string mime_type_for_path(const std::string& path);

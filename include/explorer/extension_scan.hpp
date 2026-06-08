@@ -14,8 +14,9 @@
  * @layer       5
  */
 
+#include <ase/containers/vector.hpp>
+
 #include <string>
-#include <vector>
 
 namespace ase::explorer::extension_scan {
 
@@ -31,6 +32,6 @@ struct ExtensionCount {
  * (whose basename starts with '.') are also skipped to mirror the default
  * tree view behaviour.
  */
-std::vector<ExtensionCount> scan(const std::string& root);
+ase::containers::Vector<ExtensionCount> scan(const std::string& root);
 
 }  // namespace ase::explorer::extension_scan

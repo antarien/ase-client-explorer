@@ -11,14 +11,14 @@
 
 #include <explorer/exclude.hpp>
 
-#include <set>
+#include <ase/containers/ordered.hpp>
 
 namespace ase::explorer::exclude {
 
 namespace {
 
-const std::set<std::string>& excluded_names() {
-    static const std::set<std::string> names = {
+const ase::containers::Set<std::string>& excluded_names() {
+    static const ase::containers::Set<std::string> names = {
         "build", "cmake-build-debug", "cmake-build-release", ".cache",
         "node_modules", ".git", ".idea", ".vscode", "__pycache__",
         ".DS_Store", "dist", ".tsbuildinfo",

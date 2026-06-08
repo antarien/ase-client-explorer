@@ -27,14 +27,15 @@ namespace ase::explorer::git { class StatusCache; }
 #include <gtkmm/multiselection.h>
 #include <glibmm/refptr.h>
 
+#include <ase/containers/hash_map.hpp>
+#include <ase/containers/ordered.hpp>
+#include <ase/containers/vector.hpp>
+
 #include <sigc++/slot.h>
 
 #include <memory>
-#include <set>
 #include <string>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
 namespace ase::explorer {
 
@@ -84,7 +85,7 @@ public:
      * Used by the drag source so multi-selection drops carry every marked
      * file/folder, not just the focused one.
      */
-    std::vector<std::string> selected_paths() const;
+    ase::containers::Vector<std::string> selected_paths() const;
 
     /** Activate the current selection: open file or toggle folder expansion. */
     void activate_selection();
@@ -150,8 +151,8 @@ public:
     }
 
 private:
-    std::set<std::string> m_submodule_paths;
-    std::unordered_map<std::string, submodule::SubmoduleInfo> m_metadata_cache;
+    ase::containers::Set<std::string> m_submodule_paths;
+    ase::containers::HashMap<std::string, submodule::SubmoduleInfo> m_metadata_cache;
 
     std::unique_ptr<ase::adp::gtk::ListView> m_list_view;
     std::unique_ptr<ase::adp::gtk::TreeListModel> m_tree_model;

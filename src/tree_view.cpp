@@ -21,6 +21,9 @@
 #include <ase/adp/gtk/io.hpp>
 #include <ase/adp/gtk/tree.hpp>
 #include <ase/adp/gtk/widget.hpp>
+#include <ase/containers/hash_map.hpp>
+#include <ase/containers/ordered.hpp>
+#include <ase/containers/vector.hpp>
 #include <ase/utils/fs.hpp>
 #include <ase/utils/strops.hpp>
 
@@ -39,7 +42,6 @@
 #include <fnmatch.h>
 #include <new>
 #include <string>
-#include <vector>
 
 namespace ase::explorer {
 
@@ -54,7 +56,7 @@ struct GuideState {
     // Size = depth + 1. is_last[0] is self, is_last[i] is the ancestor at
     // tree depth (depth - i). Root row's ancestor is queried against the
     // factory-level root_model by the builder before the vector is filled.
-    std::vector<bool> is_last;
+    ase::containers::Vector<bool> is_last;
 };
 
 // Width of one depth column in pixels. Must be in sync with the render loop
@@ -167,9 +169,9 @@ struct RowWidgets {
 // Per-factory state shared by the setup/bind/teardown lambdas. Lives as long
 // as the factory does.
 struct FactoryState {
-    std::unordered_map<void*, RowWidgets> row_widgets;
-    const std::set<std::string>* submodule_paths = nullptr;
-    std::unordered_map<std::string, submodule::SubmoduleInfo>* metadata_cache = nullptr;
+    ase::containers::HashMap<void*, RowWidgets> row_widgets;
+    const ase::containers::Set<std::string>* submodule_paths = nullptr;
+    ase::containers::HashMap<std::string, submodule::SubmoduleInfo>* metadata_cache = nullptr;
     // Root ListModel reference used to check is_last_sibling() for depth-0 rows
     // whose get_parent() returns null.
     Glib::RefPtr<Gio::ListModel> root_model;
@@ -335,7 +337,7 @@ Glib::RefPtr<Gio::ListStore<Gio::FileInfo>> build_sync_dir_store(
     auto store = Gio::ListStore<Gio::FileInfo>::create();
     auto dir_file = Gio::File::create_for_path(path);
 
-    std::vector<Glib::RefPtr<Gio::FileInfo>> items;
+    ase::containers::Vector<Glib::RefPtr<Gio::FileInfo>> items;
     try {
         auto enumerator = dir_file->enumerate_children(
             "standard::name,standard::display-name,standard::type,standard::is-hidden");
@@ -430,7 +432,7 @@ void TreeView::populate(const std::string& root_path) {
     // refresh (F5 / file-watcher / filter change) doesn't collapse the tree
     // the user is currently working in. Only absolute paths are captured;
     // depth, selection and scroll are intentionally not restored.
-    std::set<std::string> previously_expanded;
+    ase::containers::Set<std::string> previously_expanded;
     if (m_tree_model && m_tree_model->native()) {
         auto native = m_tree_model->native();
         unsigned int pos = 0;
@@ -803,8 +805,8 @@ std::string TreeView::selected_path() const {
     return info.get_full_path();
 }
 
-std::vector<std::string> TreeView::selected_paths() const {
-    std::vector<std::string> result;
+ase::containers::Vector<std::string> TreeView::selected_paths() const {
+    ase::containers::Vector<std::string> result;
     if (!m_selection) return result;
     const guint n = m_selection->get_n_items();
     for (guint pos = 0; pos < n; ++pos) {

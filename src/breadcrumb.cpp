@@ -19,12 +19,11 @@
 #include <explorer/breadcrumb.hpp>
 
 #include <ase/adp/gtk/io.hpp>
+#include <ase/containers/vector.hpp>
+#include <ase/math/math.hpp>
 #include <ase/utils/fs.hpp>
 
 #include <glib.h>
-
-#include <algorithm>
-#include <vector>
 
 namespace ase::explorer {
 
@@ -33,11 +32,11 @@ namespace {
 // Split an absolute filesystem path into cumulative segments relative to
 // the given base. The base is whatever the window passed via set_base()
 // — typically the parent directory of the current project root.
-std::vector<Breadcrumb::Segment> split_segments_impl(
+ase::containers::Vector<Breadcrumb::Segment> split_segments_impl(
     const std::string& absolute_path,
     const std::string& base)
 {
-    std::vector<Breadcrumb::Segment> result;
+    ase::containers::Vector<Breadcrumb::Segment> result;
     if (absolute_path.empty() || base.empty()) return result;
 
     auto rel = ase::utils::fs::relative_to(absolute_path, base);
@@ -75,7 +74,7 @@ Breadcrumb::Breadcrumb() : m_box(ase::adp::gtk::Box::horizontal(2)) {
 }
 
 void Breadcrumb::set_max_segments(int n) {
-    const int clamped = std::clamp(n, 3, 30);
+    const int clamped = ase::math::clamp(n, 3, 30);
     if (clamped == m_max_segments) return;
     m_max_segments = clamped;
     m_focus_offset = 0;
@@ -127,7 +126,7 @@ void Breadcrumb::shift_focus_to(const std::string& target_path) {
     render();
 }
 
-std::vector<Breadcrumb::Segment> Breadcrumb::current_segments() const {
+ase::containers::Vector<Breadcrumb::Segment> Breadcrumb::current_segments() const {
     return split_segments_impl(m_current_path, m_base);
 }
 

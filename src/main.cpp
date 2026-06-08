@@ -23,6 +23,7 @@
 #include <ase/adp/adw/adw.hpp>
 #include <ase/adp/gtk/application.hpp>
 #include <ase/adp/gtk/style.hpp>
+#include <ase/containers/vector.hpp>
 #include <ase/utils/fs.hpp>
 
 #include <glib.h>
@@ -30,7 +31,6 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
 
 namespace {
 
@@ -41,7 +41,7 @@ std::unique_ptr<ase::explorer::ExplorerWindow> make_window(ase::adp::gtk::Applic
     return explorer_window;
 }
 
-std::string resolve_initial_path(const std::vector<std::string>& paths) {
+std::string resolve_initial_path(const ase::containers::Vector<std::string>& paths) {
     if (paths.empty()) return std::string(ase::explorer::DEFAULT_ROOT);
     const auto& first = paths.front();
     return ase::utils::fs::is_directory(first) ? first : ase::utils::fs::parent_of(first);
@@ -99,7 +99,7 @@ int main(int argc, char* argv[]) {
         *current_window = std::move(win);
     });
 
-    app.on_open([&app, current_window](const std::vector<std::string>& paths) {
+    app.on_open([&app, current_window](const ase::containers::Vector<std::string>& paths) {
         auto win = make_window(app);
         win->load_root(resolve_initial_path(paths));
         win->present();

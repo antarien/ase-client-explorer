@@ -15,6 +15,8 @@
 
 #include <explorer/submodule.hpp>
 
+#include <ase/containers/hash_map.hpp>
+#include <ase/containers/ordered.hpp>
 #include <ase/utils/fs.hpp>
 #include <ase/fileio/text_reader.hpp>
 
@@ -57,10 +59,10 @@ bool looks_like_version_value(const std::string& v) {
 
 }  // namespace
 
-std::unordered_map<std::string, SubmoduleInfo> parse_root_version(
+ase::containers::HashMap<std::string, SubmoduleInfo> parse_root_version(
     const std::string& root_path,
-    const std::set<std::string>& submodule_paths) {
-    std::unordered_map<std::string, SubmoduleInfo> result;
+    const ase::containers::Set<std::string>& submodule_paths) {
+    ase::containers::HashMap<std::string, SubmoduleInfo> result;
     auto version_path = ase::utils::fs::Path(root_path) / "VERSION";
     if (!ase::utils::fs::exists(version_path.str())) return result;
 
@@ -69,7 +71,7 @@ std::unordered_map<std::string, SubmoduleInfo> parse_root_version(
     // per-submodule VERSION files are only 1:1 mirrors distributed by
     // `ase version sync` and must NOT be consulted here (they may be stale
     // or, for a fresh submodule, not yet distributed).
-    std::unordered_map<std::string, SubmoduleInfo> by_prefix;
+    ase::containers::HashMap<std::string, SubmoduleInfo> by_prefix;
     auto lines = ase::fileio::read_lines(version_path.str());
     for (const auto& raw : lines) {
         if (raw.empty() || raw[0] == '#') continue;
@@ -104,8 +106,8 @@ std::unordered_map<std::string, SubmoduleInfo> parse_root_version(
     return result;
 }
 
-std::set<std::string> parse_gitmodules(const std::string& root_path) {
-    std::set<std::string> submodule_paths;
+ase::containers::Set<std::string> parse_gitmodules(const std::string& root_path) {
+    ase::containers::Set<std::string> submodule_paths;
     auto gitmodules = ase::utils::fs::Path(root_path) / ".gitmodules";
     if (!ase::utils::fs::exists(gitmodules.str())) return submodule_paths;
 

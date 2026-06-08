@@ -20,12 +20,12 @@
  */
 
 #include <ase/adp/gtk/widget.hpp>
+#include <ase/containers/vector.hpp>
 
 #include <sigc++/slot.h>
 
 #include <string>
 #include <utility>
-#include <vector>
 
 namespace ase::explorer {
 
@@ -79,7 +79,7 @@ public:
 
 private:
     void render();
-    std::vector<Segment> current_segments() const;
+    ase::containers::Vector<Segment> current_segments() const;
 
     ase::adp::gtk::Box m_box;
     sigc::slot<void(const std::string&)> m_on_segment_clicked;

@@ -57,6 +57,16 @@ if(NOT TARGET ase::fileio)
     add_subdirectory(${ASE_FOUNDATION_PATH}/ase-fileio ${CMAKE_BINARY_DIR}/_deps/ase-fileio-build)
 endif()
 
+if(NOT TARGET ase::containers)
+    set(ASE_FOUNDATION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../foundation)
+    add_subdirectory(${ASE_FOUNDATION_PATH}/ase-containers ${CMAKE_BINARY_DIR}/_deps/ase-containers-build)
+endif()
+
+if(NOT TARGET ase::math)
+    set(ASE_FOUNDATION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../foundation)
+    add_subdirectory(${ASE_FOUNDATION_PATH}/ase-math ${CMAKE_BINARY_DIR}/_deps/ase-math-build)
+endif()
+
 if(NOT TARGET ase::json)
     # ase-json is a header-only INTERFACE wrapper around nlohmann_json;
     # pulling it in standalone requires the nlohmann_json target to exist
@@ -135,6 +145,8 @@ target_include_directories(ase-explorer
 )
 
 target_link_libraries(ase-explorer
+    PUBLIC
+        ase::containers
     PRIVATE
         ase::adp::gtk
         ase::adp::libgit2
@@ -142,6 +154,7 @@ target_link_libraries(ase-explorer
         ase::utils
         ase::fileio
         ase::json
+        ase::math
 )
 
 set_target_properties(ase-explorer PROPERTIES

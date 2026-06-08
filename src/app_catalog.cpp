@@ -12,6 +12,8 @@
 
 #include <explorer/app_catalog.hpp>
 
+#include <ase/containers/vector.hpp>
+
 #include <gio/gdesktopappinfo.h>
 #include <gio/gio.h>
 #include <glib.h>
@@ -37,8 +39,8 @@ AppEntry to_entry(GAppInfo* info) {
     return e;
 }
 
-std::vector<AppEntry> drain_glist(GList* list) {
-    std::vector<AppEntry> out;
+ase::containers::Vector<AppEntry> drain_glist(GList* list) {
+    ase::containers::Vector<AppEntry> out;
     for (GList* node = list; node != nullptr; node = node->next) {
         auto* info = static_cast<GAppInfo*>(node->data);
         if (!info) continue;
@@ -55,11 +57,11 @@ std::vector<AppEntry> drain_glist(GList* list) {
 
 }  // namespace
 
-std::vector<AppEntry> all() {
+ase::containers::Vector<AppEntry> all() {
     return drain_glist(g_app_info_get_all());
 }
 
-std::vector<AppEntry> for_mime_type(const std::string& mime) {
+ase::containers::Vector<AppEntry> for_mime_type(const std::string& mime) {
     if (mime.empty()) return {};
     return drain_glist(g_app_info_get_all_for_type(mime.c_str()));
 }

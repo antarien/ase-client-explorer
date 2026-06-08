@@ -25,6 +25,7 @@
 #include <ase/adp/gtk/gesture.hpp>
 #include <ase/adp/gtk/io.hpp>
 #include <ase/adp/gtk/widget.hpp>
+#include <ase/containers/vector.hpp>
 #include <ase/utils/fs.hpp>
 
 #include <giomm/file.h>
@@ -40,7 +41,6 @@
 
 #include <memory>
 #include <utility>
-#include <vector>
 
 namespace ase::explorer {
 
@@ -274,13 +274,13 @@ void ExplorerWindow::build_ui() {
     drag_source.set_actions(ase::adp::gtk::DragAction::Copy);
     drag_source.native()->signal_prepare().connect(
         [this](double, double) -> Glib::RefPtr<Gdk::ContentProvider> {
-            const std::vector<std::string> paths = m_tree_view.selected_paths();
+            const ase::containers::Vector<std::string> paths = m_tree_view.selected_paths();
             if (paths.empty()) return {};
 
             // Build the GdkFileList: every selected absolute path becomes
             // a GFile in the list. Prepend in reverse order so the final
             // GSList order matches the selection order.
-            std::vector<Glib::RefPtr<Gio::File>> file_refs;  // keep refs alive
+            ase::containers::Vector<Glib::RefPtr<Gio::File>> file_refs;  // keep refs alive
             file_refs.reserve(paths.size());
             GSList* slist = nullptr;
             for (auto it = paths.rbegin(); it != paths.rend(); ++it) {
@@ -312,7 +312,7 @@ void ExplorerWindow::build_ui() {
             text_value.set(joined);
             auto text_provider = Gdk::ContentProvider::create(text_value);
 
-            std::vector<Glib::RefPtr<Gdk::ContentProvider>> providers;
+            ase::containers::Vector<Glib::RefPtr<Gdk::ContentProvider>> providers;
             providers.push_back(file_provider);
             providers.push_back(text_provider);
             return Gdk::ContentProvider::create(providers);

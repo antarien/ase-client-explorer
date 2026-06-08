@@ -16,10 +16,11 @@
 
 #pragma once
 
+#include <ase/containers/hash_map.hpp>
+#include <ase/containers/ordered.hpp>
+
 #include <cstdint>
-#include <set>
 #include <string>
-#include <unordered_map>
 
 namespace ase::explorer::submodule {
 
@@ -39,12 +40,12 @@ struct SubmoduleInfo {
  * (e.g. `ase-pl-sky` → `ASE_PL_SKY`, `aow-client-web` → `AOW_CLIENT_WEB`).
  * Submodules without an entry are simply omitted.
  */
-std::unordered_map<std::string, SubmoduleInfo> parse_root_version(
+ase::containers::HashMap<std::string, SubmoduleInfo> parse_root_version(
     const std::string& root_path,
-    const std::set<std::string>& submodule_paths);
+    const ase::containers::Set<std::string>& submodule_paths);
 
 /** Enumerate submodule absolute paths by reading root_path/.gitmodules. */
-std::set<std::string> parse_gitmodules(const std::string& root_path);
+ase::containers::Set<std::string> parse_gitmodules(const std::string& root_path);
 
 /** Map a status string to its 0xAARRGGBB badge colour. */
 uint32_t status_color(const std::string& status);
