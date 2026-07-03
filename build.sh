@@ -510,14 +510,14 @@ script -qfec "stty cols 10000 2>/dev/null; $BUILD_PREFIX ninja ${NINJA_ARGS[*]}"
 
             case "$line" in
                 "ninja: no work to do.")
-                    [ -n "$_spin_lbl" ] && printf "\r\033[K" && _spin_lbl=""
+                    printf "\r\033[K"; _spin_lbl=""   # unconditional: section_line has no \r of its own
                     section_line "$CHECK" "Ninja" "no work to do" 18 ;;
                 "ninja: build stopped"*)
-                    [ -n "$_spin_lbl" ] && printf "\r\033[K" && _spin_lbl=""
+                    printf "\r\033[K"; _spin_lbl=""   # unconditional: else the line shifts right after a spinner frame
                     printf "\n"
                     section_line "$CROSS" "Build stopped" "interrupted" 18 ;;
                 "ninja: "*)
-                    [ -n "$_spin_lbl" ] && printf "\r\033[K" && _spin_lbl=""
+                    printf "\r\033[K"; _spin_lbl=""   # unconditional: section_line has no \r of its own
                     section_line "!" "${line#ninja: }" ;;
                 *"error:"*|*"Error:"*|*"Fehler:"*|*"fehler:"*|*"FAILED:"*|*"FAILED "*)
                     [ -n "$_spin_lbl" ] && printf "\r\033[K" && _spin_lbl=""
@@ -537,19 +537,15 @@ script -qfec "stty cols 10000 2>/dev/null; $BUILD_PREFIX ninja ${NINJA_ARGS[*]}"
                         printf "\r  ${SEC_COLOR}│${NC} ${RED}${CROSS}${NC}  ${RED}%-32s${NC} ${MUTED}%-10s${NC} ${TEXT}%s${NC}\033[K\n" \
                             "${_err_file:0:32}" "Fehler" "${_err_msg:0:$_col3}"
                     elif [[ "$line" == *"FAILED"* ]]; then
-                        _fail_mod=""
-                        _fail_file=""
-                        if [[ "$line" =~ /(ase-[a-z0-9-]+)/.*/([^/[:space:]]+) ]]; then
-                            _fail_mod="${BASH_REMATCH[1]}"
-                            _fail_file="${BASH_REMATCH[2]}"
-                        fi
-                        if [ -n "$_fail_mod" ]; then
-                            printf "\r  ${SEC_COLOR}│${NC} ${RED}${CROSS}${NC}  ${RED}%-20s${NC} ${RED}%-20s${NC} ${TEXT}%s${NC}\033[K\n" \
-                                "FAILED" "$_fail_mod" "${_fail_file:0:$_col3}"
-                        else
-                            printf "\r  ${SEC_COLOR}│${NC} ${RED}${CROSS}${NC}  ${RED}%-20s${NC} ${TEXT}%s${NC}\033[K\n" \
-                                "FAILED" "${line:0:$((_max - 22))}"
-                        fi
+                        # (c) blank │ separator so each failing target's block is detached from the
+                        # preceding progress line / previous block
+                        printf "\r  ${SEC_COLOR}│${NC}\033[K\n"
+                        # (align) FAILED sits in the counter column (col 7, an 18-wide field) so it lines up
+                        # directly under the [NNNN/NNNN] counter of the progress lines; the failing target
+                        # (last token = bin/<exe>) follows.
+                        _fail_tgt="${line##* }"
+                        printf "\r  ${SEC_COLOR}│${NC} ${RED}${CROSS}${NC}  ${RED}%-18s${NC}  ${TEXT}%s${NC}\033[K\n" \
+                            "FAILED" "$_fail_tgt"
                     else
                         printf "\r  ${SEC_COLOR}│${NC} ${RED}${CROSS}${NC}  ${RED}%s${NC}\033[K\n" "${line:0:$_max}"
                     fi ;;
@@ -633,8 +629,8 @@ script -qfec "stty cols 10000 2>/dev/null; $BUILD_PREFIX ninja ${NINJA_ARGS[*]}"
                             printf "\r\033[K\n"
                         fi
                         _prev_ctx="$_lib"
-                        printf "\r  ${SEC_COLOR}│${NC} ${GREEN}${CHECK}${NC}  %s  ${PURPLE}%s${NC}\033[K\n" \
-                            "$_fmtcnt" "$_lib"
+                        printf "\r  ${SEC_COLOR}│${NC} ${GREEN}${CHECK}${NC}  %s  ${MUTED}%-11s${NC} ${PURPLE}%s${NC}\033[K\n" \
+                            "$_fmtcnt" "Linking" "$_lib"
                         _spin_lbl="$_lib"
                     elif [[ "$line" =~ ^\[([0-9]+/[0-9]+)\]\ ([0-9.]+/s)\ Linking.*bin/([^/[:space:]]+) ]]; then
                         _cnt="${BASH_REMATCH[1]}"
@@ -646,12 +642,12 @@ script -qfec "stty cols 10000 2>/dev/null; $BUILD_PREFIX ninja ${NINJA_ARGS[*]}"
                         _zt="${_pt%%[1-9]*}"; _dt="${_pt#"$_zt"}"; [ -z "$_dt" ] && _dt="0" && _zt="${_pt:0:3}"
                         printf -v _fmtcnt "${MUTED}[%s${NC}${TEXT}%s${NC}${MUTED}/%s${NC}${TEXT}%s${NC}${MUTED}]${NC} ${MUTED}%6s${NC}" \
                             "$_zf" "$_df" "$_zt" "$_dt" "$_rate"
-                        if [[ "__link_bin__" != "${_prev_ctx:-}" && -n "${_prev_ctx:-}" ]]; then
+                        if [[ "$_exe" != "${_prev_ctx:-}" && -n "${_prev_ctx:-}" ]]; then
                             printf "\r\033[K\n"
                         fi
-                        _prev_ctx="__link_bin__"
-                        printf "\r  ${SEC_COLOR}│${NC} ${GREEN}${CHECK}${NC}  %s  ${PINK}%s${NC}\033[K\n" \
-                            "$_fmtcnt" "$_exe"
+                        _prev_ctx="$_exe"
+                        printf "\r  ${SEC_COLOR}│${NC} ${GREEN}${CHECK}${NC}  %s  ${MUTED}%-11s${NC} ${PINK}%s${NC}\033[K\n" \
+                            "$_fmtcnt" "Linking" "$_exe"
                         _spin_lbl="$_exe"
                     elif [[ "$line" =~ ^\[([0-9]+/[0-9]+)\]\ ([0-9.]+/s)\ (.+) ]]; then
                         _cnt="${BASH_REMATCH[1]}"
