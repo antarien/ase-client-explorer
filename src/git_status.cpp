@@ -284,24 +284,42 @@ void StatusCache::publish_repo(
 //    the submodule [L3 feat] badge so both row markers carry equal
 //    visual weight.
 
-std::string vcs_file_badge_markup(FileState s) {
-    if (s == FileState::Clean || s == FileState::Ignored) return {};
+// Badge appearance per FileState, indexed by the enum value. Clean and Ignored carry an
+// empty glyph because they render nothing at all - the empty slot IS the statement, so
+// there is no second place where "these two are different" has to be remembered.
+//
+// The static_assert below is load-bearing, not decoration: without it a newly added
+// FileState would silently render as an empty badge instead of failing the build.
+struct BadgeStyle {
+    const char* glyph;
+    const char* color;
+};
 
-    const char* glyph = "";
-    const char* color = "";
-    switch (s) {
-        case FileState::Modified:   glyph = "M"; color = "#B8863A"; break;  // PANEL_ORANGE
-        case FileState::Added:      glyph = "A"; color = "#4A8C6A"; break;  // PANEL_GREEN
-        case FileState::Deleted:    glyph = "D"; color = "#A84A4A"; break;  // PANEL_RED
-        case FileState::Renamed:    glyph = "R"; color = "#7A5A9C"; break;  // PANEL_PURPLE
-        case FileState::Untracked:  glyph = "?"; color = "#5A9CB8"; break;  // PANEL_CYAN
-        case FileState::Conflicted: glyph = "U"; color = "#9C8C4A"; break;  // PANEL_YELLOW
-        case FileState::Clean:
-        case FileState::Ignored:    return {};
-    }
+constexpr BadgeStyle BADGE_STYLE[] = {
+    {"",  ""       },  // Clean
+    {"M", "#B8863A"},  // Modified    PANEL_ORANGE
+    {"A", "#4A8C6A"},  // Added       PANEL_GREEN
+    {"D", "#A84A4A"},  // Deleted     PANEL_RED
+    {"R", "#7A5A9C"},  // Renamed     PANEL_PURPLE
+    {"?", "#5A9CB8"},  // Untracked   PANEL_CYAN
+    {"U", "#9C8C4A"},  // Conflicted  PANEL_YELLOW
+    {"",  ""       },  // Ignored
+};
+
+static_assert(sizeof(BADGE_STYLE) / sizeof(BADGE_STYLE[0])
+                  == static_cast<unsigned>(FileState::Ignored) + 1u,
+              "BADGE_STYLE needs exactly one slot per FileState value");
+
+std::string vcs_file_badge_markup(FileState s) {
+    const auto index = static_cast<unsigned>(s);
+    if (index >= sizeof(BADGE_STYLE) / sizeof(BADGE_STYLE[0])) return {};
+
+    const BadgeStyle& style = BADGE_STYLE[index];
+    if (style.glyph[0] == '\0') return {};   // Clean and Ignored render nothing
+
     return std::string("<span font_family='") + icons::TEXT_FONT
         + "' font_size='" + std::to_string(9 * 1024)
-        + "' foreground='" + color + "'>" + glyph + "</span>";
+        + "' foreground='" + style.color + "'>" + style.glyph + "</span>";
 }
 
 std::string vcs_dir_badge_markup(const DirRollup& r) {

@@ -1,5 +1,7 @@
 # ase-client-explorer
 
+**Design:** DSGN_066 (Browser-App), DSGN_067 (Adaptive UXD)
+
 [![Layer](https://img.shields.io/badge/Layer-5%20Client-purple.svg)]()
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)]()
 [![GTK4](https://img.shields.io/badge/UI-GTK4%2Fgtkmm-green.svg)]()

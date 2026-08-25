@@ -83,16 +83,7 @@ void ExplorerWindow::build_ui() {
     set_glyph(btn_settings, ase::ui_icons::ICON_SETTINGS);
     btn_settings.set_tooltip_text("Settings (Ctrl+,)");
     btn_settings.on_clicked([this]() { settings_dialog::show(m_window, m_file_associations, m_settings, m_root_path,
-                              [this]() {
-                                  m_breadcrumb.set_max_segments(m_settings.breadcrumb_max_segments());
-                                  // If the user changed the default root, jump to it now;
-                                  // otherwise just refresh so newly-mapped extensions show.
-                                  if (m_settings.default_root() != m_root_path) {
-                                      load_root(m_settings.default_root());
-                                  } else {
-                                      refresh();
-                                  }
-                              }); });
+                              handle_settings_closed, this); });
     header.pack_end(btn_settings);
 
     auto btn_refresh = ase::adp::gtk::Button::create();
@@ -322,16 +313,7 @@ void ExplorerWindow::build_ui() {
     // ── Keyboard shortcuts ──
     m_shortcuts.on_refresh          ([this]() { refresh(); });
     m_shortcuts.on_settings         ([this]() { settings_dialog::show(m_window, m_file_associations, m_settings, m_root_path,
-                              [this]() {
-                                  m_breadcrumb.set_max_segments(m_settings.breadcrumb_max_segments());
-                                  // If the user changed the default root, jump to it now;
-                                  // otherwise just refresh so newly-mapped extensions show.
-                                  if (m_settings.default_root() != m_root_path) {
-                                      load_root(m_settings.default_root());
-                                  } else {
-                                      refresh();
-                                  }
-                              }); });
+                              handle_settings_closed, this); });
     m_shortcuts.on_toggle_search    ([this]() { handle_search_toggle(); });
     m_shortcuts.on_copy_absolute    ([this]() { handle_copy_path(false); });
     m_shortcuts.on_copy_relative    ([this]() { handle_copy_path(true); });
@@ -588,6 +570,20 @@ void ExplorerWindow::handle_vcs_filter_toggle() {
     // change would prune away rows that are actually dirty.
     if (m_vcs_filter_active && !m_root_path.empty()) {
         m_scan_pool.schedule_full_rescan(m_root_path);
+    }
+}
+
+void ExplorerWindow::handle_settings_closed(void* user_data) {
+    auto* self = static_cast<ExplorerWindow*>(user_data);
+    if (!self) return;
+
+    self->m_breadcrumb.set_max_segments(self->m_settings.breadcrumb_max_segments());
+    // If the user changed the default root, jump to it now;
+    // otherwise just refresh so newly-mapped extensions show.
+    if (self->m_settings.default_root() != self->m_root_path) {
+        self->load_root(self->m_settings.default_root());
+    } else {
+        self->refresh();
     }
 }
 

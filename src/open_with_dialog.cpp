@@ -159,7 +159,13 @@ void on_cancel_clicked_cb(GtkButton*, gpointer user_data) {
 }
 
 void on_window_destroy_cb(GtkWidget*, gpointer user_data) {
-    delete static_cast<DialogState*>(user_data);
+    // DialogState was constructed in place into a GLib block in show(), so the destructor
+    // runs by hand before the block goes back. Its string and list members own heap
+    // buffers - skipping this call would leak every one of them.
+    auto* state = static_cast<DialogState*>(user_data);
+    if (!state) return;
+    state->~DialogState();
+    g_free(state);
 }
 
 }  // namespace
@@ -170,7 +176,12 @@ void show(ase::adp::gtk::ApplicationWindow& parent,
 {
     if (file_path.empty()) return;
 
-    auto* state = new DialogState();
+    // DialogState outlives this function: it is owned by the window and released in
+    // on_window_destroy_cb. Allocate via GLib and construct in place so the GTK widget
+    // lifetime, not the C++ stack, governs its destruction - the same form folder_picker.cpp
+    // and settings_dialog.cpp use in this unit.
+    auto* state = static_cast<DialogState*>(g_malloc0(sizeof(DialogState)));
+    new (state) DialogState();
     state->file_path = file_path;
     state->extension = extract_extension(file_path);
     state->store     = &store;

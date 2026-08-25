@@ -152,6 +152,20 @@ struct RootBrowseState {
     ExplorerSettings* settings = nullptr;
 };
 
+// Fires once the user accepts a directory in the picker. `user_data` is the same
+// RootBrowseState the browse button carries; folder_picker hands it back untouched.
+// A free function rather than a captured closure: GTK and the picker both take a plain
+// function plus a data pointer, so a closure would only wrap what the callee unwraps
+// again - see the sibling handlers at on_breadcrumb_max_changed_cb and
+// on_default_root_changed_cb above, which are built the same way.
+void on_root_chosen_cb(const std::string& chosen, void* user_data) {
+    auto* bs = static_cast<RootBrowseState*>(user_data);
+    if (!bs || !bs->entry || !bs->settings) return;
+    gtk_editable_set_text(GTK_EDITABLE(bs->entry), chosen.c_str());
+    bs->settings->set_default_root(chosen);
+    bs->settings->save();
+}
+
 // Browse-button click handler. Routes to the in-process folder_picker
 // instead of GtkFileDialog because the latter (a) requires an
 // xdg-desktop-portal FileChooser backend that isn't available on a pure
@@ -170,13 +184,9 @@ void on_browse_root_clicked_cb(GtkButton* btn, gpointer user_data) {
     const char* current = gtk_editable_get_text(GTK_EDITABLE(bs->entry));
     const std::string start = current ? std::string(current) : std::string();
 
-    folder_picker::show(parent, start,
-        [bs](const std::string& chosen) {
-            if (!bs || !bs->entry || !bs->settings) return;
-            gtk_editable_set_text(GTK_EDITABLE(bs->entry), chosen.c_str());
-            bs->settings->set_default_root(chosen);
-            bs->settings->save();
-        });
+    // bs outlives the picker: it is owned by the browse button, and the button outlives
+    // any window the button opened.
+    folder_picker::show(parent, start, on_root_chosen_cb, bs);
 }
 
 GtkWidget* build_display_page(ExplorerSettings& settings) {
@@ -764,16 +774,37 @@ GtkWidget* build_associations_page(FileAssociations& associations,
     rebuild_chips_strip(state.get());
     update_hint(state.get());
 
-    // Pin shared_ptr to the page so all callbacks remain valid.
-    auto* state_holder = new std::shared_ptr<CockpitState>(state);
+    // Pin the shared state to the page so all callbacks remain valid. The holder block
+    // comes from GLib and is constructed in place; the destroy notify runs the destructor
+    // by hand before the block goes back. Same form as folder_picker.cpp here and as the
+    // sister client in clients/ase-client-viewer/src/folder_picker.cpp (its
+    // on_window_destroy_cb and the matching teardown) —
+    // the widget lifetime governs the teardown, not a C++ scope.
+    using CockpitStateHolder = std::shared_ptr<CockpitState>;
+    auto* state_holder =
+        static_cast<CockpitStateHolder*>(g_malloc0(sizeof(CockpitStateHolder)));
+    new (state_holder) CockpitStateHolder(state);
     g_object_set_data_full(
         G_OBJECT(page),
         "ase-cockpit-state",
         state_holder,
-        +[](gpointer p) { delete static_cast<std::shared_ptr<CockpitState>*>(p); });
+        +[](gpointer p) {
+            auto* holder = static_cast<CockpitStateHolder*>(p);
+            if (!holder) return;
+            holder->~CockpitStateHolder();  // drops the last reference to CockpitState
+            g_free(holder);
+        });
 
     return page;
 }
+
+// The close hook as one addressable thing: the function and the data it wants handed
+// back. It lives as long as the dialog window and is released by the same destroy notify
+// that fires it, so no caller has to think about its lifetime.
+struct CloseHook {
+    CloseFn fn        = nullptr;
+    void*   user_data = nullptr;
+};
 
 }  // namespace
 
@@ -781,7 +812,8 @@ void show(ase::adp::gtk::ApplicationWindow& parent,
           FileAssociations& associations,
           ExplorerSettings& settings,
           const std::string& root_path,
-          std::function<void()> on_close)
+          CloseFn on_close,
+          void* on_close_data)
 {
     auto window = ase::adp::adw::Window::create();
     window.set_title("Preferences");
@@ -853,20 +885,25 @@ void show(ase::adp::gtk::ApplicationWindow& parent,
     adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(toolbar.native_widget()), body);
     adw_window_set_content(ADW_WINDOW(window.native()), toolbar.native_widget());
 
-    // Wire the on_close hook so callers can refresh state that depends on
-    // the now-mutated FileAssociations store (e.g. the tree view's mapping
-    // indicator dots). The std::function is heap-allocated and owned by the
-    // window via g_object_set_data_full.
+    // Wire the on_close hook so callers can refresh state that depends on the
+    // now-mutated FileAssociations store (e.g. the tree view's mapping indicator dots).
+    // The hook pair is GLib-allocated and owned by the window; the destroy notify both
+    // fires it and releases it, so it cannot outlive the dialog and cannot leak.
     if (on_close) {
-        auto* heap_cb = new std::function<void()>(std::move(on_close));
+        auto* hook = static_cast<CloseHook*>(g_malloc0(sizeof(CloseHook)));
+        new (hook) CloseHook();
+        hook->fn        = on_close;
+        hook->user_data = on_close_data;
         g_object_set_data_full(
             G_OBJECT(window.native()),
             "ase-on-close",
-            heap_cb,
+            hook,
             +[](gpointer p) {
-                auto* cb = static_cast<std::function<void()>*>(p);
-                if (cb && *cb) (*cb)();
-                delete cb;
+                auto* h = static_cast<CloseHook*>(p);
+                if (!h) return;
+                if (h->fn) h->fn(h->user_data);
+                h->~CloseHook();
+                g_free(h);
             });
     }
 

@@ -74,6 +74,18 @@ private:
     void handle_status_updated();
 
     /**
+     * Runs when the settings dialog window is destroyed: re-applies the breadcrumb
+     * limit and either jumps to a newly chosen default root or refreshes in place.
+     *
+     * Static with a void* because the dialog takes a plain function plus a data
+     * pointer, the way every GTK callback does; `user_data` is the ExplorerWindow.
+     * Both entry points that open the dialog - the toolbar button and the Ctrl+,
+     * shortcut - hand in the same function, so the behaviour cannot drift apart
+     * between them.
+     */
+    static void handle_settings_closed(void* user_data);
+
+    /**
      * Type-ahead search: if a printable key is pressed anywhere in the
      * main window with no modifier and the search entry is currently
      * hidden, open the search entry and seed it with that character.

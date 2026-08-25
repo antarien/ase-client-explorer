@@ -2,7 +2,7 @@
 
 /**
  * @file        file_associations.hpp
- * @brief       Persistent extension -> desktop-id mapping store
+ * @brief       Persistent extension → desktop-id mapping store
  * @description User-defined file-extension to desktop-application mapping,
  *              persisted as JSON under ~/.config/ase/explorer/. Lookups are
  *              strictly explicit: if no mapping exists for an extension, the
@@ -10,11 +10,18 @@
  *              guess, no substitute. Callers that want the OS default must
  *              ask Gio themselves; this store does not blur the line.
  *
+ *              DER SPEICHERORT IST EINE ZEICHENKETTE, kein Pfadobjekt. Die
+ *              Pfadbibliothek der Standardbibliothek ist baumweit gesperrt;
+ *              gerechnet wird mit ase-fileio (L0, aus jeder Schicht
+ *              erreichbar) auf Zeichenketten — path_join, parent_of,
+ *              path_exists, create_directories, read_text, write_text.
+ *              Dieselbe Umstellung wie im Schwesterspeicher
+ *              explorer_settings.hpp, und aus demselben Grund.
+ *
  * @module      ase-client-explorer
  * @layer       5
  */
 
-#include <filesystem>
 #include <map>
 #include <string>
 #include <vector>
@@ -46,14 +53,14 @@ public:
     std::vector<std::pair<std::string, std::string>> all() const;
 
     /** Path used by save()/load() — exposed for diagnostics. */
-    const std::filesystem::path& path() const noexcept { return m_path; }
+    const std::string& path() const noexcept { return m_path; }
 
 private:
     static std::string normalize_extension(const std::string& ext);
-    static std::filesystem::path default_store_path();
+    static std::string default_store_path();
 
     std::map<std::string, std::string> m_map;
-    std::filesystem::path m_path;
+    std::string                        m_path;
 };
 
 }  // namespace ase::explorer

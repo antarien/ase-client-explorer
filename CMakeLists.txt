@@ -135,6 +135,29 @@ add_executable(ase-explorer
     src/window.cpp
     src/git_status.cpp
     src/git_scan_pool.cpp
+
+    include/explorer/types.hpp
+    include/explorer/icons.hpp
+    include/explorer/exclude.hpp
+    include/explorer/submodule.hpp
+    include/explorer/theme.hpp
+    include/explorer/search_bar.hpp
+    include/explorer/breadcrumb.hpp
+    include/explorer/file_watcher.hpp
+    include/explorer/clipboard_ops.hpp
+    include/explorer/context_menu.hpp
+    include/explorer/keyboard_shortcuts.hpp
+    include/explorer/settings_dialog.hpp
+    include/explorer/file_associations.hpp
+    include/explorer/explorer_settings.hpp
+    include/explorer/open_with_dialog.hpp
+    include/explorer/folder_picker.hpp
+    include/explorer/app_catalog.hpp
+    include/explorer/extension_scan.hpp
+    include/explorer/tree_view.hpp
+    include/explorer/window.hpp
+    include/explorer/git_status.hpp
+    include/explorer/git_scan_pool.hpp
 )
 
 target_include_directories(ase-explorer

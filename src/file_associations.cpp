@@ -6,23 +6,61 @@
  *              All extensions are normalized to lowercase, no leading dot,
  *              before storage and lookup so callers can pass either form.
  *
+ *              PFAD- UND DATEIZUGRIFF LAUFEN UEBER ase-fileio (L0), Stelle
+ *              fuer Stelle:
+ *
+ *                Pfadverkettung     → fileio::path_join
+ *                Existenzpruefung   → fileio::path_exists
+ *                Elternverzeichnis  → fileio::parent_of
+ *                Verzeichnisbau     → fileio::create_directories
+ *                Lesen              → fileio::read_text
+ *                Schreiben          → fileio::write_text
+ *
+ *              DIE EXISTENZFRAGE IST DIE WEITERE, nicht die engere:
+ *              path_exists ist fuer JEDEN Eintrag wahr, auch fuer ein
+ *              Verzeichnis — genau das tat die abgeloeste Fassung auch. Die
+ *              engere Frage heisst file_exists und wuerde das Verhalten hier
+ *              stillschweigend aendern.
+ *
+ *              WARUM HIER KEINE FEHLERMELDUNG STEHT, obwohl Lesen und
+ *              Schreiben scheitern koennen: diese Einheit bindet ase::log
+ *              nicht (CMakeLists.txt, target_link_libraries). Ein
+ *              Lesefehlschlag endet wie vor der Umstellung in einem leeren
+ *              Speicher, ein Schreibfehlschlag bleibt wie vorher still. Das
+ *              ist eine bewusste Luecke; sie zu schliessen braucht zuerst
+ *              eine Log-Kante fuer diesen Client.
+ *
  * @module      ase-client-explorer
  * @layer       5
  */
 
 #include <explorer/file_associations.hpp>
 
+#include <ase/fileio/path.hpp>
+#include <ase/fileio/text_reader.hpp>
+#include <ase/fileio/text_writer.hpp>
 #include <ase/json/json.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <fstream>
+#include <string>
 
 namespace ase::explorer {
 
-namespace fs = std::filesystem;
 using ase::json::Json;
+
+namespace {
+
+/// Append "ase/explorer/<file_name>" to a config root. Kept in one place so the
+/// three roots below cannot drift apart.
+std::string store_path_under(const std::string& config_root, const std::string& file_name) {
+    std::string out = fileio::path_join(config_root, "ase");
+    out             = fileio::path_join(out, "explorer");
+    return fileio::path_join(out, file_name);
+}
+
+}  // anonymous namespace
 
 std::string FileAssociations::normalize_extension(const std::string& ext) {
     std::string out;
@@ -34,29 +72,30 @@ std::string FileAssociations::normalize_extension(const std::string& ext) {
     return out;
 }
 
-fs::path FileAssociations::default_store_path() {
+std::string FileAssociations::default_store_path() {
     if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg) {
-        return fs::path(xdg) / "ase" / "explorer" / "file-associations.json";
+        return store_path_under(xdg, "file-associations.json");
     }
     if (const char* home = std::getenv("HOME"); home && *home) {
-        return fs::path(home) / ".config" / "ase" / "explorer" / "file-associations.json";
+        return store_path_under(fileio::path_join(home, ".config"), "file-associations.json");
     }
-    return fs::path(".config") / "ase" / "explorer" / "file-associations.json";
+    return store_path_under(".config", "file-associations.json");
 }
 
 FileAssociations FileAssociations::load() {
     FileAssociations out;
     out.m_path = default_store_path();
 
-    std::error_code ec;
-    if (!fs::exists(out.m_path, ec)) {
+    if (!fileio::path_exists(out.m_path)) {
         return out;
     }
 
-    std::ifstream in(out.m_path);
-    if (!in) return out;
+    // An empty result covers both "unreadable" and "empty file"; both end in an empty
+    // store, exactly as the stream-based version did.
+    const std::string text = fileio::read_text(out.m_path);
+    if (text.empty()) return out;
 
-    Json doc = Json::parse(in, /*cb*/ nullptr, /*allow_exceptions*/ false);
+    Json doc = Json::parse(text, /*cb*/ nullptr, /*allow_exceptions*/ false);
     if (!doc.is_object()) return out;
 
     for (auto it = doc.begin(); it != doc.end(); ++it) {
@@ -70,17 +109,16 @@ FileAssociations FileAssociations::load() {
 }
 
 void FileAssociations::save() const {
-    std::error_code ec;
-    fs::create_directories(m_path.parent_path(), ec);
+    // Already-exists counts as success here, which is what this call site needs: the
+    // directory usually survives from the previous run.
+    fileio::create_directories(fileio::parent_of(m_path));
 
     Json doc = Json::object();
     for (const auto& [ext, id] : m_map) {
         doc["." + ext] = id;
     }
 
-    std::ofstream out(m_path);
-    if (!out) return;
-    out << doc.dump(2);
+    fileio::write_text(m_path, doc.dump(2));
 }
 
 std::string FileAssociations::lookup(const std::string& extension) const {

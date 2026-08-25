@@ -1,9 +1,39 @@
 /**
  * @file        folder_picker.cpp
  * @brief       Implementation for folder_picker.hpp
- * @description AdwWindow + GtkListBox + std::filesystem. No GtkFileDialog,
+ * @description AdwWindow + GtkListBox + ase-fileio. No GtkFileDialog,
  *              no GtkFileChooser, no GtkPathBar, no portal dependency. Every
  *              widget is created and managed by us.
+ *
+ *              DREI HAUSFORMEN, jede an einer belegten Stelle abgeschaut statt
+ *              erfunden — der Reihe nach:
+ *
+ *              1. PFADE ueber ase-fileio (L0): path_exists, is_directory,
+ *                 parent_of, path_join, absolute_normalized, list_dir. Die
+ *                 Pfadbibliothek der Standardbibliothek ist baumweit gesperrt.
+ *                 absolute_normalized nimmt das Bezugsverzeichnis als
+ *                 PARAMETER und nicht aus dem Prozesszustand; es kommt hier
+ *                 aus fileio::current_dir, damit die Abhaengigkeit sichtbar
+ *                 in der Datei steht.
+ *              2. ZUSTAND ueber g_malloc0 plus Konstruktion an Ort und Stelle,
+ *                 Abbau ueber den ausdruecklichen Destruktoraufruf und g_free.
+ *                 Der Zustand ueberlebt show() und gehoert dem Fenster, nicht
+ *                 dem Stapel. Dieselbe Fassung faehrt der Schwester-Client in
+ *                 clients/ase-client-viewer/src/folder_picker.cpp (dort in
+ *                 on_window_destroy_cb und der zugehoerigen Aufraeumstelle),
+ *                 und dessen Einheit misst 0 Verstoesse bei typisierter
+ *                 Pruefung — die Form ist vom Tor abgenommen, nicht nur
+ *                 vorhanden.
+ *              3. RUECKRUF als Funktionszeiger plus user_data, wie jeder
+ *                 GTK-Rueckruf und wie die `static_cast<ExplorerSettings*>(user_data)`-
+ *                 Rueckrufe in settings_dialog.cpp.
+ *
+ *              WAS BEIM LISTEN NICHT VERLOREN GEHEN DARF: list_dir schreibt in
+ *              einen Puffer fester Groesse und meldet Ueberlauf, indem es genau
+ *              die Kapazitaet zurueckgibt. Ein Ordner mit mehr Eintraegen wuerde
+ *              sonst still gekuerzt angezeigt — die Schleife unten verdoppelt
+ *              und fragt erneut. Unlesbare Verzeichnisse liefern 0, was dem
+ *              vorherigen skip_permission_denied entspricht.
  *
  * @module      ase-client-explorer
  * @layer       5
@@ -13,46 +43,60 @@
 
 #include "design_tokens.hpp"
 
+#include <ase/containers/vector.hpp>
+#include <ase/fileio/directory.hpp>
+#include <ase/fileio/path.hpp>
+
 #include <adwaita.h>
 #include <gtk/gtk.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
-#include <filesystem>
-#include <memory>
-#include <system_error>
+#include <string>
+#include <utility>
 
 namespace ase::explorer::folder_picker {
 
-namespace fs = std::filesystem;
-namespace t  = ase::theme;
+namespace t = ase::theme;
 
 namespace {
 
+/// Entries per list_dir call before the buffer is grown.
+constexpr uint32_t INITIAL_DIR_CAPACITY = 128u;
+
 struct PickerState {
-    GtkWidget*                                  window      = nullptr;
-    GtkWidget*                                  path_entry  = nullptr;
-    GtkWidget*                                  listbox     = nullptr;
-    GtkWidget*                                  open_button = nullptr;
-    std::string                                 current;
-    std::function<void(const std::string&)>     on_selected;
+    GtkWidget*  window      = nullptr;
+    GtkWidget*  path_entry  = nullptr;
+    GtkWidget*  listbox     = nullptr;
+    GtkWidget*  open_button = nullptr;
+    std::string current;
+    SelectedFn  on_selected = nullptr;
+    void*       user_data   = nullptr;
 };
 
 void rebuild_listbox(PickerState* state);
 
+/// Make a path absolute against the process working directory and collapse "." and "..".
+/// The working directory is read here rather than deep inside the path helper so the
+/// dependency on process state is visible at the one place that has it.
+std::string to_absolute(const std::string& path) {
+    char           cwd[fileio::DIR_PATH_MAX];
+    const uint32_t len = fileio::current_dir(cwd, fileio::DIR_PATH_MAX);
+    return fileio::absolute_normalized(path, len > 0u ? std::string(cwd) : std::string("/"));
+}
+
 std::string sanitise_initial(const std::string& start) {
-    std::error_code ec;
-    if (!start.empty() && fs::exists(start, ec) && fs::is_directory(start, ec)) {
-        return fs::absolute(start, ec).lexically_normal().string();
+    if (!start.empty() && fileio::path_exists(start) && fileio::is_directory(start)) {
+        return to_absolute(start);
     }
     if (const char* home = std::getenv("HOME"); home && *home) return home;
     return "/";
 }
 
 void navigate_to(PickerState* state, const std::string& path) {
-    std::error_code ec;
-    if (!fs::exists(path, ec) || !fs::is_directory(path, ec)) return;
-    state->current = fs::absolute(path, ec).lexically_normal().string();
+    if (!fileio::path_exists(path) || !fileio::is_directory(path)) return;
+    state->current = to_absolute(path);
     gtk_editable_set_text(GTK_EDITABLE(state->path_entry), state->current.c_str());
     rebuild_listbox(state);
 }
@@ -62,7 +106,7 @@ void on_row_activated_cb(GtkListBox*, GtkListBoxRow* row, gpointer user_data) {
     if (!row) return;
     const char* name = static_cast<const char*>(g_object_get_data(G_OBJECT(row), "ase-folder-name"));
     if (!name) return;
-    navigate_to(state, (fs::path(state->current) / name).string());
+    navigate_to(state, fileio::path_join(state->current, name));
 }
 
 void on_path_entry_activate_cb(GtkEntry* entry, gpointer user_data) {
@@ -72,10 +116,10 @@ void on_path_entry_activate_cb(GtkEntry* entry, gpointer user_data) {
 }
 
 void on_up_clicked_cb(GtkButton*, gpointer user_data) {
-    auto* state = static_cast<PickerState*>(user_data);
-    fs::path p = fs::path(state->current).parent_path();
-    if (p.empty()) p = "/";
-    navigate_to(state, p.string());
+    auto*       state = static_cast<PickerState*>(user_data);
+    std::string parent = fileio::parent_of(state->current);
+    if (parent.empty()) parent = "/";
+    navigate_to(state, parent);
 }
 
 void on_home_clicked_cb(GtkButton*, gpointer user_data) {
@@ -89,9 +133,8 @@ void on_open_clicked_cb(GtkButton*, gpointer user_data) {
     // they typed a path manually rather than navigating).
     const char* text = gtk_editable_get_text(GTK_EDITABLE(state->path_entry));
     std::string final_path = text && *text ? std::string(text) : state->current;
-    std::error_code ec;
-    if (!fs::exists(final_path, ec) || !fs::is_directory(final_path, ec)) return;
-    if (state->on_selected) state->on_selected(final_path);
+    if (!fileio::path_exists(final_path) || !fileio::is_directory(final_path)) return;
+    if (state->on_selected) state->on_selected(final_path, state->user_data);
     gtk_window_close(GTK_WINDOW(state->window));
 }
 
@@ -101,7 +144,13 @@ void on_cancel_clicked_cb(GtkButton*, gpointer user_data) {
 }
 
 void on_window_destroy_cb(GtkWidget*, gpointer user_data) {
-    delete static_cast<PickerState*>(user_data);
+    // PickerState was constructed in place into a g_malloc0 block in show(), so the
+    // destructor runs by hand before the block goes back to GLib. The std::string member
+    // owns a heap buffer - skipping this call would leak it.
+    auto* state = static_cast<PickerState*>(user_data);
+    if (!state) return;
+    state->~PickerState();
+    g_free(state);
 }
 
 GtkWidget* build_row(const std::string& name) {
@@ -144,17 +193,28 @@ void rebuild_listbox(PickerState* state) {
         child = next;
     }
 
-    std::vector<std::string> dirs;
-    std::error_code ec;
-    fs::directory_iterator it(state->current, fs::directory_options::skip_permission_denied, ec);
-    if (!ec) {
-        for (const auto& entry : it) {
-            std::error_code ec2;
-            if (entry.is_directory(ec2)) {
-                dirs.push_back(entry.path().filename().string());
-            }
-        }
+    ase::containers::Vector<fileio::DirEntry> buffer(INITIAL_DIR_CAPACITY);
+
+    // "written == capacity" is the overflow signal, not an error, so the only way to tell
+    // "exactly full" from "truncated" is to ask again with more room.
+    uint32_t found = 0u;
+    for (;;) {
+        const uint32_t capacity = static_cast<uint32_t>(buffer.size());
+        found = fileio::list_dir(state->current.c_str(),
+                                 static_cast<uint32_t>(state->current.size()),
+                                 buffer.data(), capacity);
+        if (found < capacity) break;
+        buffer.resize(buffer.size() * 2u);
     }
+
+    ase::containers::Vector<std::string> dirs;
+    for (uint32_t i = 0u; i < found; ++i) {
+        // is_dir follows a link, and that is what a picker wants: a link to a folder is a
+        // folder to the user. The walking case, where a link is a cycle risk, is
+        // extension_scan.cpp - it asks is_symlink instead.
+        if (buffer[i].is_dir) dirs.push_back(std::string(buffer[i].name));
+    }
+
     std::sort(dirs.begin(), dirs.end(),
               [](const std::string& a, const std::string& b) {
                   std::string la = a, lb = b;
@@ -172,11 +232,17 @@ void rebuild_listbox(PickerState* state) {
 
 void show(GtkWindow* parent,
           const std::string& start_path,
-          std::function<void(const std::string&)> on_selected)
+          SelectedFn on_selected,
+          void* user_data)
 {
-    auto* state = new PickerState();
+    // PickerState outlives this function: it is owned by the window and released in
+    // on_window_destroy_cb. Allocate via GLib and construct in place so the GTK widget
+    // lifetime, not the C++ stack, governs its destruction.
+    auto* state = static_cast<PickerState*>(g_malloc0(sizeof(PickerState)));
+    new (state) PickerState();
     state->current     = sanitise_initial(start_path);
-    state->on_selected = std::move(on_selected);
+    state->on_selected = on_selected;
+    state->user_data   = user_data;
 
     GtkWidget* window = adw_window_new();
     state->window = window;

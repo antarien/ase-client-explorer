@@ -329,6 +329,19 @@ elif [ "$IS_CLEAN" = true ]; then
 fi
 
 # ============================================
+# PREBUILD GATES
+# ============================================
+# Bis 2026-08-18 fuhr dieser Einstiegspunkt KEIN einziges Prebuild-Tor — wie fuenf weitere von
+# elf. Ein Tor, das an einer Stelle nicht laeuft, meldet dort nichts, und das sieht aus wie Ruhe.
+ASE_PREBUILD_GATES="$SCRIPT_DIR/../../core/ase-validator/scripts/prebuild/run_prebuild_gates.sh"
+if [ -x "$ASE_PREBUILD_GATES" ]; then
+    if ! "$ASE_PREBUILD_GATES" "$SCRIPT_DIR"; then
+        echo "Build abgebrochen: Prebuild-Tore haben Funde gemeldet."
+        exit 1
+    fi
+fi
+
+# ============================================
 # CREATE BUILD DIRECTORY
 # ============================================
 

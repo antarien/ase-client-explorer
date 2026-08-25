@@ -19,13 +19,21 @@
  *              CSS rules in theme.cpp (uppercase letter-spaced tabs, MENU_RED
  *              underline on the active tab, monospace font).
  *
+ *              DER SCHLIESS-RUECKRUF IST EIN FUNKTIONSZEIGER MIT user_data.
+ *              Das ist die Form, die diese Einheit ohnehin ueberall fuehrt —
+ *              GTK ruft ausschliesslich so zurueck, und die eigenen Rueckrufe
+ *              der Umsetzung machen es genauso — dort steht in jedem Rueckruf
+ *              ein `static_cast<ExplorerSettings*>(user_data)` als erste Zeile.
+ *              Ein Funktionsobjekt musste hier bisher auf den Haldenspeicher
+ *              gelegt und vom Fenster verwaltet werden; mit dem Zeigerpaar
+ *              faellt diese Verwaltung ersatzlos weg.
+ *
  * @module      ase-client-explorer
  * @layer       5
  */
 
 #include <ase/adp/gtk/application.hpp>
 
-#include <functional>
 #include <string>
 
 namespace ase::explorer {
@@ -34,6 +42,12 @@ class ExplorerSettings;
 }
 
 namespace ase::explorer::settings_dialog {
+
+/**
+ * Called once when the dialog window is destroyed. `user_data` is handed back
+ * unchanged from the show() call, exactly as a GTK signal handler receives it.
+ */
+using CloseFn = void (*)(void* user_data);
 
 /**
  * Show the preferences window transient for the given parent. The
@@ -45,11 +59,15 @@ namespace ase::explorer::settings_dialog {
  * The optional on_close callback fires when the dialog window is destroyed,
  * letting the caller refresh any UI that depends on the now-mutated store
  * (for example the tree view's "extension mapped" indicator dots).
+ *
+ * `on_close_data` must outlive the dialog window. The dialog neither owns nor
+ * frees it.
  */
 void show(ase::adp::gtk::ApplicationWindow& parent,
           FileAssociations& associations,
           ExplorerSettings& settings,
           const std::string& root_path,
-          std::function<void()> on_close = {});
+          CloseFn on_close = nullptr,
+          void* on_close_data = nullptr);
 
 }  // namespace ase::explorer::settings_dialog
