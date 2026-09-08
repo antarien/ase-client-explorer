@@ -10,11 +10,11 @@ ASE CLIENT BUILD CONFIGURATION
 @module      ase-client-explorer
 @layer       5 (Clients)
 @created     2026-04-12
-@modified    2026-04-12
-@version     00.00.01.00001 [seed]
+@modified    2026-09-08
+@version     00.00.26.00026 [init]
 ]]
 
-# Parse local VERSION if not building from root
+# Parse local VERSION (SSOT) if not building from root
 if(NOT DEFINED ASE_CLIENT_EXPLORER_VERSION)
     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
         message(FATAL_ERROR "VERSION file not found: ${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
