@@ -167,6 +167,13 @@ target_include_directories(ase-explorer
         ${CMAKE_CURRENT_SOURCE_DIR}/../sha-client-web/sha-web-console/generated
 )
 
+# Target-lokale Sprachstufe. `set(CMAKE_CXX_STANDARD 20)` weiter oben setzt sie
+# verzeichnisweit und bleibt stehen; diese Zeile bindet sie zusaetzlich AN DAS ZIEL,
+# damit sie eine Eigenschaft von ase-explorer ist und nicht des Verzeichnisses, in dem
+# es gerade konfiguriert wird. Gleiche Form wie tools/ase-cli:101 — PRIVATE, weil ein
+# Executable seine Sprachstufe an niemanden weitergibt.
+target_compile_features(ase-explorer PRIVATE cxx_std_20)
+
 target_link_libraries(ase-explorer
     PUBLIC
         ase::containers

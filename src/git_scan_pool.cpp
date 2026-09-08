@@ -50,7 +50,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace ase::explorer::git {
@@ -136,12 +135,12 @@ void collect_repo_paths(const std::string& parent_root,
     out.push_back(parent_root);
 
     auto opened = ase::adp::libgit2::Repository::open(parent_root);
-    if (std::holds_alternative<ase::adp::libgit2::Error>(opened)) return;
-    auto& repo = std::get<ase::adp::libgit2::Repository>(opened);
+    if (opened.is_err()) return;
+    auto& repo = opened.unwrap();
 
     auto subs = ase::adp::libgit2::submodule::list(repo);
-    if (std::holds_alternative<ase::adp::libgit2::Error>(subs)) return;
-    const auto& v = std::get<std::vector<ase::adp::libgit2::SubmoduleInfo>>(subs);
+    if (subs.is_err()) return;
+    const auto& v = subs.unwrap();
 
     for (const auto& info : v) {
         if (!info.initialized) continue;
@@ -157,8 +156,8 @@ void collect_repo_paths(const std::string& parent_root,
 // repo must not poison the rest of the queue).
 void scan_and_publish(const std::string& repo_root, StatusCache& cache) {
     auto opened = ase::adp::libgit2::Repository::open(repo_root);
-    if (std::holds_alternative<ase::adp::libgit2::Error>(opened)) return;
-    auto& repo = std::get<ase::adp::libgit2::Repository>(opened);
+    if (opened.is_err()) return;
+    auto& repo = opened.unwrap();
 
     SubmoduleSummary summary;
     summary.head_short = repo.head_short();
@@ -170,12 +169,12 @@ void scan_and_publish(const std::string& repo_root, StatusCache& cache) {
     opts.recurse_untracked = true;
 
     auto scanned = ase::adp::libgit2::scan(repo, opts);
-    if (std::holds_alternative<ase::adp::libgit2::Error>(scanned)) {
+    if (scanned.is_err()) {
         // Publish empty result so the cache stops showing stale data.
         cache.publish_repo(repo_root, summary, {}, {});
         return;
     }
-    const auto& result = std::get<ase::adp::libgit2::StatusResult>(scanned);
+    const auto& result = scanned.unwrap();
 
     std::vector<std::pair<std::string, FileStatus>> file_entries;
     file_entries.reserve(result.entries.size());
