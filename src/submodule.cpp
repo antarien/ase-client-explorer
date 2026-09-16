@@ -106,10 +106,20 @@ ase::containers::HashMap<std::string, SubmoduleInfo> parse_root_version(
     return result;
 }
 
-ase::containers::Set<std::string> parse_gitmodules(const std::string& root_path) {
-    ase::containers::Set<std::string> submodule_paths;
-    auto gitmodules = ase::utils::fs::Path(root_path) / ".gitmodules";
-    if (!ase::utils::fs::exists(gitmodules.str())) return submodule_paths;
+// EIN REGISTER JE EBENE, NICHT EINES FUER DEN GANZEN BAUM.
+//
+// `tools/ase-forge` ist seit dem Umbau ein eigenes Superprojekt: die Wurzel fuehrt es als EINEN
+// Eintrag, seine fuenf Werkzeuge stehen in SEINEM `.gitmodules`. Wer nur die Wurzeldatei liest,
+// zeichnet ein Subgit-Symbol fuer die Schmiede und KEINES fuer die Werkzeuge darin — und meldet
+// darueber nichts: fuer ihn sind es gewoehnliche Ordner.
+//
+// Das ist dieselbe Klasse wie der Praefixfilter des Validators, der die direkten Kinder einer
+// Wurzel liest: ein Werkzeug, das EINE Ebene liest, verliert die Enkel lautlos. Deshalb steigt
+// diese Suche ab, sobald ein gefundener Pfad sein eigenes Register traegt.
+static void collect_gitmodules(const std::string& base_path,
+                               ase::containers::Set<std::string>& out) {
+    auto gitmodules = ase::utils::fs::Path(base_path) / ".gitmodules";
+    if (!ase::utils::fs::exists(gitmodules.str())) return;
 
     auto lines = ase::fileio::read_lines(gitmodules.str());
     for (const auto& raw : lines) {
@@ -119,10 +129,20 @@ ase::containers::Set<std::string> parse_gitmodules(const std::string& root_path)
             while (!rel.empty() && (rel.back() == ' ' || rel.back() == '\t')) {
                 rel.pop_back();
             }
-            auto abs = (ase::utils::fs::Path(root_path) / rel).str();
-            submodule_paths.insert(abs);
+            auto abs = (ase::utils::fs::Path(base_path) / rel).str();
+            // Ein bereits bekannter Pfad beendet den Abstieg. Ohne diesen Halt wuerde ein
+            // Register, das sich selbst nennt, endlos absteigen — und ein Fehler im Bestand
+            // legte den Betrachter lahm statt ihn falsch zu zeichnen.
+            if (out.insert(abs).second) {
+                collect_gitmodules(abs, out);
+            }
         }
     }
+}
+
+ase::containers::Set<std::string> parse_gitmodules(const std::string& root_path) {
+    ase::containers::Set<std::string> submodule_paths;
+    collect_gitmodules(root_path, submodule_paths);
     return submodule_paths;
 }
 
