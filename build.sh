@@ -333,13 +333,33 @@ fi
 # ============================================
 # Bis 2026-08-18 fuhr dieser Einstiegspunkt KEIN einziges Prebuild-Tor — wie fuenf weitere von
 # elf. Ein Tor, das an einer Stelle nicht laeuft, meldet dort nichts, und das sieht aus wie Ruhe.
-ASE_PREBUILD_GATES="$SCRIPT_DIR/../../core/ase-validator/scripts/prebuild/run_prebuild_gates.sh"
-if [ -x "$ASE_PREBUILD_GATES" ]; then
-    if ! "$ASE_PREBUILD_GATES" "$SCRIPT_DIR"; then
-        echo "Build abgebrochen: Prebuild-Tore haben Funde gemeldet."
-        exit 1
-    fi
+#
+# DER LAEUFER IST DER MASCHINENKANAL, NICHT DIE ANZEIGE (2026-09-16). Bis dahin stand hier ein
+# direkter Aufruf von `run_prebuild_gates.sh`, dessen Ausgabe UNGEFILTERT in die Konsole lief.
+# Der Laeufer druckt `GATE-BEGIN:`, `GATE-SCOPE:`, `GATE-COUNT:`, `GATE-INFO:` und
+# `GATE-SUMMARY:`, damit eine Sitzung ihren Stand AUSWERTEN kann — diese Zeilen brachen quer
+# durch jede Box: ohne `│`, ohne Symbol, ohne Spalte. Sie sind kein Beiwerk, sondern der
+# Gegenstand: die Batterie LIEST sie und macht daraus die Befund- und die Umfangsspalte.
+#
+# Gefahren wird deshalb dieselbe Batterie wie in den fuenf Tiers. Sie liegt seit heute genau
+# einmal, neben `gates.conf` — vorher trugen sieben Bauskripte je eine Kopie und die drei
+# Clients gar keine.
+#
+# ZWEI FAELLE, DIE SPERREN MUESSEN, und der zweite sperrte bis heute nicht: eine fehlende
+# `gates.conf` (das faengt die Batterie) und eine fehlende Batterie (das faengt der Test hier).
+# Der alte `[ -x ... ]`-Zweig war fail-open — fehlte der Laeufer, baute dieses Skript ohne ein
+# einziges Tor und meldete Erfolg.
+_ASE_BATTERY="$SCRIPT_DIR/../../core/ase-validator/scripts/prebuild/prebuild_battery.sh"
+if [ ! -f "$_ASE_BATTERY" ]; then
+    echo "PREBUILD BLOCKED: battery MISSING: $_ASE_BATTERY"
+    exit 1
 fi
+source "$_ASE_BATTERY"
+# `true`, weil dieser Einstieg heute ALLE 27 Tore fuhr: der Laeufer ignoriert das Feld
+# `zuschnitt` und faehrt `module` wie `all`. Eine Umstellung darf den Pruefumfang nicht
+# verschieben, in keine Richtung — 27 vorher, 27 nachher.
+ASE_GATE_LOADS_MODULES=true
+do_pre_validation
 
 # ============================================
 # CREATE BUILD DIRECTORY

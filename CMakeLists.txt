@@ -105,6 +105,18 @@ if(NOT TARGET ase::adp::libcuckoo)
     add_subdirectory(${ASE_ADAPTER_PATH}/ase-adp-libcuckoo ${CMAKE_BINARY_DIR}/_deps/ase-adp-libcuckoo-build)
 endif()
 
+# ── Tests ────────────────────────────────────────────────────────────
+#
+# `enable_testing()` MUSS vor den Zielen stehen: ohne den Aufruf merkt sich CMake keine der
+# add_test()-Deklarationen, und `ctest` sieht eine leere Suite. Beim Bau mit `ase exp -B` ist
+# dieses Verzeichnis die Projektwurzel, also gilt hier derselbe Satz wie in den fuenf Tiers.
+#
+# DER BLOCK IST DER ANSCHLUSS, NICHT DIE ABLAGE. Gemessen 2026-09-16: 32 der 139 Einheiten des
+# Baums fuehren ihn ohne eigenes tests/ — darunter alle fuenf Tiers und die ganze Foundation.
+if(ASE_BUILD_TESTS)
+    enable_testing()
+endif()
+
 # ── Desktop Executable ───────────────────────────────────────────────
 #
 # SOLID/SSOT layout: main.cpp is a pure orchestrator (~80 lines). Every
@@ -160,6 +172,19 @@ add_executable(ase-explorer
     include/explorer/git_scan_pool.hpp
 )
 
+# ZWEI WARNUNGEN DES CMAKE-TORES STEHEN HIER BEWUSST OFFEN:
+# `target_include_directories should use generator expressions` und
+# `install(DIRECTORY include/ ...) for headers`. Beide stehen auch an tools/ase-cli und
+# tools/ase-edge-daemon, die dort je noch zwei weitere tragen.
+#
+# BEIDE BESCHREIBEN DEN VERTRAG EINER BIBLIOTHEK. Dieses Ziel ist ein Executable: die
+# Include-Pfade sind PRIVATE, weil kein fremdes Ziel dagegen bindet, und `$<INSTALL_INTERFACE:>`
+# an einem PRIVATE-Schluesselwort ist folgenlos. Ein `install(DIRECTORY include/)` legte die
+# privaten Kopfdateien einer Anwendung ins Systempraefix.
+#
+# Die zwei Zeilen einzutragen faerbt das Tor gruen und macht die Datei unwahr. GEMESSEN
+# 2026-09-16: keines der drei ASE-Executables traegt sie, und keines der fuenf Tiers — es ist
+# eine KLASSE, kein Befund dieser Einheit.
 target_include_directories(ase-explorer
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -174,6 +199,11 @@ target_include_directories(ase-explorer
 # Executable seine Sprachstufe an niemanden weitergibt.
 target_compile_features(ase-explorer PRIVATE cxx_std_20)
 
+#[[ VERBOTEN: keine L3-Module, keine L4-Plugins, kein Kernel.
+    Dieser Client ist L5 und bindet ausschliesslich Foundation (L0), Core (L1) und Adapter
+    (ase::adp::*). Er laedt keine Module und fuehrt keinen Kernel — eine Kante nach modules/
+    oder plugins/ waere keine Abkuerzung, sondern eine Abhaengigkeit auf einen Bestand, den
+    diese Bau-Einheit gar nicht konfiguriert. ]]
 target_link_libraries(ase-explorer
     PUBLIC
         ase::containers
