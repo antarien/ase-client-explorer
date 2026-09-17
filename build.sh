@@ -349,7 +349,7 @@ fi
 # `gates.conf` (das faengt die Batterie) und eine fehlende Batterie (das faengt der Test hier).
 # Der alte `[ -x ... ]`-Zweig war fail-open — fehlte der Laeufer, baute dieses Skript ohne ein
 # einziges Tor und meldete Erfolg.
-_ASE_BATTERY="$SCRIPT_DIR/../../core/ase-validator/scripts/prebuild/prebuild_battery.sh"
+_ASE_BATTERY="$SCRIPT_DIR/../../tools/ase-forge/ase-validator/scripts/prebuild/prebuild_battery.sh"
 if [ ! -f "$_ASE_BATTERY" ]; then
     echo "PREBUILD BLOCKED: battery MISSING: $_ASE_BATTERY"
     exit 1
