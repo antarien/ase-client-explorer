@@ -13,6 +13,7 @@
 #include <explorer/app_catalog.hpp>
 
 #include <ase/containers/vector.hpp>
+#include <ase/log/log.hpp>
 
 #include <gio/gdesktopappinfo.h>
 #include <gio/gio.h>
@@ -23,6 +24,8 @@
 namespace ase::explorer::app_catalog {
 
 namespace {
+
+constexpr const char* kLogSystem = "ExplorerAppCatalog";
 
 AppEntry to_entry(GAppInfo* info) {
     AppEntry e;
@@ -95,16 +98,46 @@ AppEntry find_by_id(const std::string& desktop_id) {
     return e;
 }
 
+/// Start the application named by `desktop_id` on `file_path`.
+///
+/// WAS EIN TRUE VON HIER BELEGT UND WAS NICHT: g_app_info_launch kehrt mit TRUE zurueck,
+/// sobald der Prozess ANGELEGT ist. Alles danach liegt ausserhalb seiner Zusage — ein Kind,
+/// das am dynamischen Linker stirbt, ist an dieser Schnittstelle von einem laufenden
+/// Programm nicht zu unterscheiden. Diese Grenze ist gemessen und nicht vermutet: ein
+/// ase-viewer, dessen libcgraph-Soname von 8 auf 10 gesprungen war, startete monatelang
+/// nicht, und der Startweg meldete jedes Mal Erfolg.
+///
+/// WER DEN RUECKGABEWERT VERWIRFT, MACHT DARAUS DAS, WAS ER NIE BEHAUPTET HAT. Deshalb
+/// meldet diese Einheit beide Fehlerfaelle selbst, statt sie dem Aufrufer zu ueberlassen:
+/// die Stelle hier kennt den GError, der Aufrufer nur ein bool.
 bool launch(const std::string& desktop_id, const std::string& file_path) {
-    if (desktop_id.empty() || file_path.empty()) return false;
+    if (desktop_id.empty() || file_path.empty()) {
+        ase::log::error(ase::log::ERR::CAT::INPUT_REJECTED, kLogSystem,
+                        "app_launch", "desktop id or file path empty");
+        return false;
+    }
     GDesktopAppInfo* d = g_desktop_app_info_new(desktop_id.c_str());
-    if (!d) return false;
+    if (!d) {
+        // UNKNOWN_ID: die Kennung steht in keiner Registry. Das trifft eine Verknuepfung auf
+        // eine .desktop, die deinstalliert oder umbenannt wurde — der Speicher haelt sie
+        // weiter, und ohne diese Zeile endete der Doppelklick lautlos.
+        ase::log::error(ase::log::ERR::CAT::UNKNOWN_ID, kLogSystem,
+                        "app_launch_desktop_lookup", desktop_id.c_str());
+        return false;
+    }
 
     GFile* file = g_file_new_for_path(file_path.c_str());
     GList* files = g_list_append(nullptr, file);
 
     GError* err = nullptr;
     gboolean ok = g_app_info_launch(G_APP_INFO(d), files, nullptr, &err);
+
+    if (ok != TRUE) {
+        // HOST_OP_FAILED: die Operation lief und ist gescheitert. Der GError traegt den Text
+        // des Betriebssystems und wird GELESEN, bevor er freigegeben wird.
+        ase::log::error(ase::log::ERR::CAT::HOST_OP_FAILED, kLogSystem,
+                        "app_launch", err && err->message ? err->message : "no error text");
+    }
 
     g_list_free(files);
     g_object_unref(file);

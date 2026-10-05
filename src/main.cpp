@@ -24,6 +24,8 @@
 #include <ase/adp/gtk/application.hpp>
 #include <ase/adp/gtk/style.hpp>
 #include <ase/containers/vector.hpp>
+#include <ase/fileio/path.hpp>
+#include <ase/log/log_lifecycle.hpp>
 #include <ase/utils/fs.hpp>
 
 #include <glib.h>
@@ -33,6 +35,29 @@
 #include <utility>
 
 namespace {
+
+/// Append the fixed tail "ase/explorer/explorer.log" to a config root.
+///
+/// DIESELBE BILDUNG WIE DER EINSTELLUNGSSPEICHER, absichtlich: explorer_settings.cpp legt
+/// seine Datei unter demselben Kopf ab, und zwei verschiedene Orte fuer die Dateien EINES
+/// Werkzeugs waeren eine Fundstelle mehr fuer jeden, der danach sucht. Ein relativer Pfad
+/// ist hier nicht brauchbar — init_server_standalone loest ihn gegen die PROJEKTWURZEL auf,
+/// und die installierte Fassung dieses Clients laeuft ausserhalb jedes Projektbaums.
+std::string log_path_under(const std::string& config_root) {
+    std::string out = ase::fileio::path_join(config_root, "ase");
+    out = ase::fileio::path_join(out, "explorer");
+    return ase::fileio::path_join(out, "explorer.log");
+}
+
+std::string resolve_log_path() {
+    if (const char* xdg = g_getenv("XDG_CONFIG_HOME"); xdg && *xdg) {
+        return log_path_under(xdg);
+    }
+    if (const char* home = g_getenv("HOME"); home && *home) {
+        return log_path_under(ase::fileio::path_join(home, ".config"));
+    }
+    return log_path_under(".config");
+}
 
 std::unique_ptr<ase::explorer::ExplorerWindow> make_window(ase::adp::gtk::Application& app) {
     auto window = ase::adp::gtk::ApplicationWindow::create(app);
@@ -50,6 +75,17 @@ std::string resolve_initial_path(const ase::containers::Vector<std::string>& pat
 }  // namespace
 
 int main(int argc, char* argv[]) {
+    // ── Der Fehlerkanal steht VOR allem anderen ───────────────────────
+    // Jede Zeile, die dieser Client meldet, braucht einen angelegten Logger; vorher
+    // verschluckt das Null-Logger-Tor sie still. Der Start gehoert damit an die erste
+    // Anweisung von main und nicht in on_startup, denn der Rumpf hier laeuft davor.
+    //
+    // "EXP" ist die Marke im [ASE] [<label>]-Kopf, dieselbe Stelle, an der die Tiers ihr
+    // WORLD oder ENGINE tragen. Die Datei kommt dazu, nicht statt der Konsole: wer das
+    // Werkzeug aus einem Terminal startet, sieht die Zeile sofort, und wer es ueber seine
+    // .desktop startet, findet sie hinterher.
+    ase::log::init_server_standalone("ase-explorer", "EXP", resolve_log_path());
+
     // ── Make the xdg-desktop-portal-gtk backend eligible on Hyprland ──
     // The gtk portal's .portal file declares `UseIn=gnome`, so on a pure
     // Hyprland session it is filtered out and GtkFileDialog has NO
@@ -106,5 +142,10 @@ int main(int argc, char* argv[]) {
         *current_window = std::move(win);
     });
 
-    return app.run(argc, argv);
+    const int rc = app.run(argc, argv);
+
+    // Die Senken werden ausdruecklich geschlossen, damit die letzte Zeile die Datei
+    // erreicht: eine gepufferte Meldung aus dem Abbau waere sonst genau die, die fehlt.
+    ase::log::shutdown();
+    return rc;
 }

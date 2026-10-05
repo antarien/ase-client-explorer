@@ -45,6 +45,20 @@ configure_file(
 
 message(STATUS "Configuring ${PROJECT_NAME} v${PROJECT_VERSION}")
 
+# ── ASE_ROOT — die Wurzel, gegen die zugezogene Module ihre DATEN suchen ──
+#
+# EIN ZUGEZOGENES MODUL SIEHT DEN AUFRUFER ALS PROJEKTWURZEL, und das ist beim Standalone-Bau
+# dieses Clients falsch. core/ase-log/CMakeLists.txt:64-70 sagt es ausdruecklich — „ASE_ROOT
+# for standalone server builds, CMAKE_SOURCE_DIR for root build" — und bildet daraus den Pfad
+# zu den Taxonomie-Daten seines Codegen-Schritts. Ohne diese Zeile setzte es
+# CMAKE_SOURCE_DIR ein und suchte unter clients/ase-client-explorer/tools/ase-forge/… , wo
+# nichts liegt; Ninja brach mit „missing and no known rule to make it" ab.
+#
+# DER FEHLER WAR AM CMAKE-LAUF NICHT ZU SEHEN: die Konfiguration lief durch, der Pfad entsteht
+# als Abhaengigkeit eines Stempels und faellt erst beim Uebersetzen auf. Dieselbe Tiefe wie bei
+# tools/ase-cli/CMakeLists.txt:38, das die Variable genauso bildet.
+get_filename_component(ASE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+
 # ── Foundation dependencies (built standalone if not already in scope) ──
 
 if(NOT TARGET ase::utils)
@@ -86,6 +100,94 @@ if(NOT TARGET ase::json)
     endif()
     set(ASE_FOUNDATION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../foundation)
     add_subdirectory(${ASE_FOUNDATION_PATH}/ase-json ${CMAKE_BINARY_DIR}/_deps/ase-json-build)
+endif()
+
+# ── Core dependency (L1) — die Log-Kante dieses Clients ────────────────
+#
+# WARUM DIESER CLIENT ase::log BINDET: er hatte keinen Fehlerkanal. Drei Dateikoepfe
+# hielten die Luecke ausdruecklich fest und nannten zugleich die Bedingung, unter der sie
+# zu schliessen ist — „wer sie schliessen will, braucht zuerst eine Log-Kante fuer diesen
+# Client, nicht eine Zeile in dieser Datei" (explorer_settings.cpp, file_associations.cpp,
+# git_scan_pool.cpp). Gemessen am Startweg: ein fehlgeschlagenes g_app_info_launch war an
+# keiner Stelle sichtbar, weil die Zusage dieser Funktion beim ANGELEGTEN Prozess endet.
+# Ein Betrachter, dessen Binaer am dynamischen Linker starb, blieb darum monatelang still.
+#
+# DIE BESCHAFFUNG FOLGT DER FORM DIESER DATEI, NICHT DER DER TIERS. cmake/Dependencies.cmake
+# ruft FetchContent_MakeAvailable fuer ACHT Vorhaben in einer Zeile, libdatachannel und FTXUI
+# darunter; eingebunden zoege dieser Dateibrowser einen WebRTC-Stack fuer eine Fehlzeile.
+# Stattdessen dieselbe Form wie oben bei nlohmann_json: zuerst das Systempaket, FetchContent
+# nur als Rueckfall. Gemessen liegt spdlog hier als 1.17.0, EnTT nicht — der Rueckfall trifft
+# also genau eines der beiden, und welches, entscheidet die Maschine und nicht diese Datei.
+#
+# DIE REIHENFOLGE IST BINDEND: ase::log → ase::ecs, ase::containers ; ase::ecs → entt,
+# ase::types. ase-log nennt spdlog::spdlog in seiner Bindeliste, BESCHAFFT es aber nicht —
+# wer es ohne dieses Ziel per add_subdirectory zieht, bekommt keinen Schichtbruch gemeldet,
+# sondern ein unbekanntes Ziel, und das ist der schlechtere Meldeweg.
+
+# KEIN find_package FUER DIESE ZWEI — DAS HAUS BAUT SIE SELBST.
+#
+# Die erste Fassung suchte zuerst das Systempaket, nach dem Muster, das diese Datei bei
+# nlohmann_json fuehrt. Fuer spdlog ist das falsch, und der Unterschied ist gemessen: alle
+# fuenf Tiers holen spdlog ueber FetchContent und binden es STATISCH — kein Tier-Binaer
+# nennt libspdlog in seinen NEEDED-Eintraegen. Das Systempaket ist dagegen eine
+# Shared Library, die libfmt.so.12 nachzieht.
+#
+# UND GENAU DIESE NACHZIEHUNG SCHEITERT AUF DIESER MASCHINE. /opt/anaconda/lib fuehrt ein
+# libfmt.so.11 und steht im Suchpfad vor /usr/lib, wo das passende libfmt.so.12 liegt; der
+# Binder meldet es als „needed by /usr/lib/libspdlog.so.1.17, not found". CMake warnt vor
+# derselben Verschattung bereits fuer sechs GTK-Bibliotheken — eine Warnung, die bisher
+# niemanden betraf, weil kein Ziel dieses Clients eine verschattete Kette hatte.
+#
+# nlohmann_json darf das Systempaket nehmen, weil es HEADER-ONLY ist und nichts nachzieht.
+# Die Unterscheidung ist nicht die Bequemlichkeit, sondern die Bauform des Pakets.
+include(FetchContent)
+
+if(NOT TARGET spdlog::spdlog)
+    FetchContent_Declare(
+        spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG v1.13.0
+    )
+    FetchContent_MakeAvailable(spdlog)
+endif()
+
+if(NOT TARGET EnTT::EnTT)
+    FetchContent_Declare(
+        entt
+        GIT_REPOSITORY https://github.com/skypjack/entt.git
+        GIT_TAG v3.13.0
+    )
+    FetchContent_MakeAvailable(entt)
+endif()
+
+if(NOT TARGET ase::types)
+    set(ASE_FOUNDATION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../foundation)
+    add_subdirectory(${ASE_FOUNDATION_PATH}/ase-types ${CMAKE_BINARY_DIR}/_deps/ase-types-build)
+endif()
+
+# ase::platform STAND IN KEINER DOKUMENTIERTEN KETTE UND BRACH DEN BAU TROTZDEM.
+# core/ase-ecs/CMakeLists.txt:188 bindet es als PRIVATE — sleep_nanos() fuer die Boot- und
+# Abbau-Taktung. Ein PRIVATE-Eintrag wird nicht an Verbraucher weitergereicht, aber das Ziel
+# muss trotzdem IM BAUM stehen; sonst meldet CMake „links to ase::platform but the target was
+# not found". Abgeleitet war diese Liste zuerst aus einem Kommentar in tools/ase-cli, der nur
+# ase::ecs → entt, ase::types nennt, und genau diese Zeile fehlte dort. Die Bindeliste des
+# Ziels ist nicht der Abschluss: gemessen wird an den CMakeLists, nie an ihrer Beschreibung.
+#
+# ase-platform ist ein L0-Blatt und bindet selbst kein ase::-Ziel (sein eigener Vermerk :102
+# nennt eine ase::-Kante dort ausdruecklich falsch). Damit endet der Abschluss hier.
+if(NOT TARGET ase::platform)
+    set(ASE_FOUNDATION_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../foundation)
+    add_subdirectory(${ASE_FOUNDATION_PATH}/ase-platform ${CMAKE_BINARY_DIR}/_deps/ase-platform-build)
+endif()
+
+if(NOT TARGET ase::ecs)
+    set(ASE_CORE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../core)
+    add_subdirectory(${ASE_CORE_PATH}/ase-ecs ${CMAKE_BINARY_DIR}/_deps/ase-ecs-build)
+endif()
+
+if(NOT TARGET ase::log)
+    set(ASE_CORE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../core)
+    add_subdirectory(${ASE_CORE_PATH}/ase-log ${CMAKE_BINARY_DIR}/_deps/ase-log-build)
 endif()
 
 # ── Adapter dependencies (built standalone if not already in scope) ─────
@@ -215,6 +317,10 @@ target_link_libraries(ase-explorer
         ase::fileio
         ase::json
         ase::math
+        # ase::log (core/ase-log — L1): der EINE Fehlerkanal dieses Clients. Er traegt die
+        # Kategorie-SSOT aus core/ase-log/data/log_categories.json mit; eine Meldung ohne
+        # gueltige Kategorie uebersetzt nicht.
+        ase::log
 )
 
 set_target_properties(ase-explorer PROPERTIES

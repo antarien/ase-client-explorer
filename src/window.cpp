@@ -26,6 +26,7 @@
 #include <ase/adp/gtk/io.hpp>
 #include <ase/adp/gtk/widget.hpp>
 #include <ase/containers/vector.hpp>
+#include <ase/log/log.hpp>
 #include <ase/utils/fs.hpp>
 
 #include <giomm/file.h>
@@ -43,6 +44,12 @@
 #include <utility>
 
 namespace ase::explorer {
+
+namespace {
+
+constexpr const char* kLogSystem = "ExplorerWindow";
+
+}  // namespace
 
 ExplorerWindow::ExplorerWindow(ase::adp::gtk::ApplicationWindow window)
     : m_window(std::move(window))
@@ -326,12 +333,11 @@ void ExplorerWindow::build_ui() {
     // Filesystem changes refresh the tree AND reschedule a VCS rescan.
     // The scan pool deduplicates pending paths, so a storm of events
     // collapses to one rescan per repo per cycle.
-    m_file_watcher.on_changed([this]() {
-        refresh();
-        if (!m_root_path.empty()) {
-            m_scan_pool.schedule_full_rescan(m_root_path);
-        }
-    });
+    //
+    // Der Rescan steht seit dem Umbau in refresh() selbst und hier deshalb nicht mehr
+    // zusaetzlich: zwei Aufrufe waeren durch die Zusammenfassung harmlos, aber sie liessen
+    // offen, welche der beiden Stellen die zustaendige ist.
+    m_file_watcher.on_changed([this]() { refresh(); });
 
     // ── VCS status cache wiring ──
     m_tree_view.set_status_cache(&m_status_cache);
@@ -414,6 +420,16 @@ void ExplorerWindow::load_default_root() {
 void ExplorerWindow::refresh() {
     if (m_root_path.empty()) return;
     m_tree_view.populate(m_root_path);
+    // DER RESCAN GEHOERT HIERHER UND NICHT ZU DEN AUFRUFERN. populate() liest den
+    // Statuspuffer; ohne einen neuen Durchlauf zeigt das Fenster den Stand des letzten
+    // Durchlaufs. Genau das trat auf, als ein Submodul angelegt wurde: die Anzeige stand auf
+    // dem Zwischenstand zwischen dem Entfernen des Puffereintrags und dem Commit.
+    //
+    // Vorher riefen die Taste und der Knopf nur populate(), und allein der Dateiwaechter zog
+    // den Rescan nach — drei Aufrufer, von denen zwei an etwas denken mussten. Die Schlange
+    // fasst gleiche Pfade zusammen, deshalb kostet der Zug hier nichts und macht aus drei
+    // Verhaltensweisen eine.
+    m_scan_pool.schedule_full_rescan(m_root_path);
 }
 
 void ExplorerWindow::present() {
@@ -442,11 +458,31 @@ void ExplorerWindow::handle_file_activated(const std::string& path) {
     // /a/foo.bar/baz would otherwise pick up ".bar/baz" as the extension.
     const std::string filename = ase::utils::fs::filename_of(path);
     const auto dot = filename.rfind('.');
-    if (dot == std::string::npos || dot == 0 || dot + 1 >= filename.size()) return;
+    if (dot == std::string::npos || dot == 0 || dot + 1 >= filename.size()) {
+        // Kein Fehler, aber der Grund, warum ein Doppelklick nichts tat. Ohne diese Zeile
+        // ist er von einem gescheiterten Start nicht zu unterscheiden — und genau diese
+        // Verwechslung kostete beim libcgraph-Sprung Monate.
+        //
+        // DIE EINSTELLIGE FORM IST DIE GEMESSENE: ase::log::debug nimmt EINE Nachricht und
+        // traegt den Besitzer als Praefix in Klammern, anders als error und warn, die den
+        // Slot und die Kategorie getrennt fuehren.
+        ase::log::debug(std::string("[") + kLogSystem + "] file activated without extension: "
+                        + filename);
+        return;
+    }
     const std::string ext = filename.substr(dot + 1);
     const std::string desktop_id = m_file_associations.lookup(ext);
-    if (desktop_id.empty()) return;
-    app_catalog::launch(desktop_id, path);
+    if (desktop_id.empty()) {
+        ase::log::debug(std::string("[") + kLogSystem + "] no association for extension: " + ext);
+        return;
+    }
+    // DER RUECKGABEWERT WIRD GEPRUEFT, NICHT VERWORFEN. Die Fehlerzeile selbst fällt in
+    // app_catalog::launch, weil nur dort der GError liegt; hier steht, was der Nutzer
+    // wollte und nicht bekam, damit das Log die Kette vom Klick bis zum Grund tragt.
+    if (!app_catalog::launch(desktop_id, path)) {
+        ase::log::warn(ase::log::WRN::CAT::HOST_OP_FAILED, kLogSystem,
+                       "file_activated_launch", desktop_id.c_str());
+    }
 }
 
 void ExplorerWindow::handle_right_click_open_terminal() {

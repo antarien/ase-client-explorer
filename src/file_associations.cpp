@@ -22,13 +22,19 @@
  *              engere Frage heisst file_exists und wuerde das Verhalten hier
  *              stillschweigend aendern.
  *
- *              WARUM HIER KEINE FEHLERMELDUNG STEHT, obwohl Lesen und
- *              Schreiben scheitern koennen: diese Einheit bindet ase::log
- *              nicht (CMakeLists.txt, target_link_libraries). Ein
- *              Lesefehlschlag endet wie vor der Umstellung in einem leeren
- *              Speicher, ein Schreibfehlschlag bleibt wie vorher still. Das
- *              ist eine bewusste Luecke; sie zu schliessen braucht zuerst
- *              eine Log-Kante fuer diesen Client.
+ *              DIE FRUEHERE LUECKE IST GESCHLOSSEN, und zwar in der
+ *              Reihenfolge, die hier stand: zuerst die Log-Kante fuer
+ *              diesen Client, dann die Zeilen. Der Client bindet ase::log
+ *              seit dem Vorgang um den libcgraph-Soname-Sprung, bei dem
+ *              ein Doppelklick monatelang nichts tat und nichts es melden
+ *              konnte.
+ *
+ *              DER SCHREIBFEHLSCHLAG MELDET, DER LESEFEHLSCHLAG NICHT:
+ *              ein leerer Speicher ist der gueltige Anfangszustand und
+ *              vom unlesbaren Bestand nicht zu unterscheiden, weil
+ *              read_text beide als leere Zeichenkette zurueckgibt. Ein
+ *              fehlgeschlagener Schrieb dagegen verwirft eine Einstellung,
+ *              die der Benutzer im Fenster gesetzt und gesehen hat.
  *
  * @module      ase-client-explorer
  * @layer       5
@@ -40,6 +46,7 @@
 #include <ase/fileio/text_reader.hpp>
 #include <ase/fileio/text_writer.hpp>
 #include <ase/json/json.hpp>
+#include <ase/log/log.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -51,6 +58,8 @@ namespace ase::explorer {
 using ase::json::Json;
 
 namespace {
+
+constexpr const char* kLogSystem = "ExplorerFileAssociations";
 
 /// Append "ase/explorer/<file_name>" to a config root. Kept in one place so the
 /// three roots below cannot drift apart.
@@ -111,14 +120,24 @@ FileAssociations FileAssociations::load() {
 void FileAssociations::save() const {
     // Already-exists counts as success here, which is what this call site needs: the
     // directory usually survives from the previous run.
-    fileio::create_directories(fileio::parent_of(m_path));
+    if (!fileio::create_directories(fileio::parent_of(m_path))) {
+        ase::log::error(ase::log::ERR::CAT::HOST_OP_FAILED, kLogSystem,
+                        "associations_dir_create", m_path.c_str());
+        return;
+    }
 
     Json doc = Json::object();
     for (const auto& [ext, id] : m_map) {
         doc["." + ext] = id;
     }
 
-    fileio::write_text(m_path, doc.dump(2));
+    // EIN STILLER SCHREIBFEHLSCHLAG IST HIER TEURER ALS EIN LESEFEHLSCHLAG: wer eine
+    // Verknuepfung setzt, hat sie im Fenster gesehen und haelt sie fuer gespeichert. Beim
+    // naechsten Start ist sie weg, und nichts verbindet das eine mit dem anderen.
+    if (!fileio::write_text(m_path, doc.dump(2))) {
+        ase::log::error(ase::log::ERR::CAT::HOST_OP_FAILED, kLogSystem,
+                        "associations_write", m_path.c_str());
+    }
 }
 
 std::string FileAssociations::lookup(const std::string& extension) const {
