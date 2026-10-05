@@ -61,9 +61,16 @@ std::string own_executable() {
 /// Die Wurzel kommt aus der EIGENEN Adresse: liegt sie unter <root>/clients/<x>/build/bin,
 /// ist <root> vier Ebenen darueber. Laeuft dieser Prozess nicht aus einem Quellbaum — etwa
 /// als installiertes Paket —, trifft die Bedingung nicht und es bleibt bei der .desktop.
-std::string sibling_build(const std::string& binary) {
+/// `self` ist ein PARAMETER, damit diese Entscheidung pruefbar ist.
+///
+/// Mit festem /proc/self/exe liesse sich die Regel nur im laufenden Explorer beobachten, also
+/// erst nach einem Bau und nur von Hand. So fuehrt eine Sonde beide Faelle vor: den Pfad
+/// eines Quellbaums, der den Geschwisterbau finden MUSS, und den eines installierten
+/// Programms, der NICHTS finden darf. Eine Zusicherung, die nur im Betrieb sichtbar ist, ist
+/// keine.
+std::string sibling_build(const std::string& binary, const std::string& self_path) {
     if (binary.empty()) return {};
-    const std::string self = own_executable();
+    const std::string self = self_path.empty() ? own_executable() : self_path;
     if (self.empty()) return {};
 
     const std::string bin_dir   = fileio::parent_of(self);             // …/build/bin
@@ -213,7 +220,7 @@ bool launch(const std::string& desktop_id, const std::string& file_path) {
         const std::string wanted = (parts != nullptr && parts[0] != nullptr)
             ? std::string(parts[0]) : std::string();
         g_strfreev(parts);
-        const std::string local = sibling_build(wanted);
+        const std::string local = sibling_build(wanted, std::string());
         if (!local.empty()) {
             GError* mk_err = nullptr;
             local_app = g_app_info_create_from_commandline(
