@@ -24,11 +24,17 @@
  *              Capacity>` in ring_buffer.hpp)
  *              und push() gibt bei Vollstand false zurueck. Hier ist die
  *              Schlange unbegrenzt: bei Vollstand fiele ein Scan-Auftrag
- *              weg, das Abzeichen im Baum bliebe still veraltet, und
- *              diese Einheit koennte es nicht einmal melden — sie bindet
- *              ase::log nicht. Ein Kopfindex auf ase::containers::Vector
- *              bleibt im vorgeschriebenen Modul, verwirft nichts und ist
- *              amortisiert O(1).
+ *              weg und das Abzeichen im Baum bliebe still veraltet. Ein
+ *              Kopfindex auf ase::containers::Vector bleibt im
+ *              vorgeschriebenen Modul, verwirft nichts und ist amortisiert
+ *              O(1).
+ *
+ *              DER ZWEITE GRUND, DER HIER STAND, GILT NICHT MEHR: dieser
+ *              Client band ase::log nicht und haette ein Verwerfen nicht
+ *              melden koennen. Die Kante steht seit dem Vorgang um den
+ *              libcgraph-Soname-Sprung. Die Wahl bleibt dieselbe — eine
+ *              Schlange, die nichts verwirft, braucht keine Meldung ueber
+ *              ein Verwerfen.
  *
  * @module      ase-client-explorer
  * @layer       5

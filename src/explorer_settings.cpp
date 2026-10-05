@@ -24,14 +24,18 @@
  *              auch. Die engere Frage — liegt hier eine regulaere Datei —
  *              heisst file_exists und wuerde hier das Verhalten aendern.
  *
- *              WARUM HIER KEINE FEHLERMELDUNG STEHT, obwohl beide Zugriffe
- *              scheitern koennen: diese Einheit bindet ase::log nicht
- *              (CMakeLists.txt der Einheit, target_link_libraries). Der
- *              Fehlerfall endet wie vor der Umstellung in den Vorgabewerten,
- *              und ein Schreibfehlschlag bleibt wie vorher still. Das ist
- *              eine bewusste Luecke und kein blinder Fleck aus Versehen —
- *              wer sie schliessen will, braucht zuerst eine Log-Kante fuer
- *              diesen Client, nicht eine Zeile in dieser Datei.
+ *              DIE FRUEHERE LUECKE IST GESCHLOSSEN, in der Reihenfolge, die
+ *              hier stand: zuerst die Log-Kante fuer diesen Client, dann die
+ *              Zeilen. Ausgeloest hat es der Vorgang um den libcgraph-Soname-
+ *              Sprung, bei dem ein Doppelklick monatelang nichts tat und
+ *              keine Einheit dieses Clients es melden konnte.
+ *
+ *              DER SCHREIBFEHLSCHLAG MELDET, DER LESEFEHLSCHLAG NICHT, und
+ *              das ist kein Rest der alten Luecke: ein unlesbarer Bestand
+ *              endet in den Vorgabewerten und ist von einem nie angelegten
+ *              Speicher nicht unterscheidbar, weil read_text beide als leere
+ *              Zeichenkette zurueckgibt. Ein fehlgeschlagener Schrieb
+ *              dagegen verwirft eine Einstellung, die gesetzt wurde.
  *
  * @module      ase-client-explorer
  * @layer       5
@@ -43,6 +47,7 @@
 #include <ase/fileio/text_reader.hpp>
 #include <ase/fileio/text_writer.hpp>
 #include <ase/json/json.hpp>
+#include <ase/log/log.hpp>
 #include <ase/math/scalar.hpp>
 
 #include <cstdlib>
@@ -53,6 +58,8 @@ namespace ase::explorer {
 using ase::json::Json;
 
 namespace {
+
+constexpr const char* kLogSystem = "ExplorerSettings";
 
 /// Append the fixed tail "ase/explorer/settings.json" to a config root.
 /// Kept in one place so the three roots below cannot drift apart.
@@ -101,13 +108,22 @@ ExplorerSettings ExplorerSettings::load() {
 void ExplorerSettings::save() const {
     // Already-exists counts as success here, which is what this call site needs: the
     // directory usually survives from the previous run.
-    fileio::create_directories(fileio::parent_of(m_path));
+    if (!fileio::create_directories(fileio::parent_of(m_path))) {
+        ase::log::error(ase::log::ERR::CAT::HOST_OP_FAILED, kLogSystem,
+                        "settings_dir_create", m_path.c_str());
+        return;
+    }
 
     Json doc = Json::object();
     doc["breadcrumb_max_segments"] = m_breadcrumb_max;
     doc["default_root"]            = m_default_root;
 
-    fileio::write_text(m_path, doc.dump(2));
+    // Der Fehlschlag faellt beim naechsten Start auf, nicht hier: die Vorgabewerte sehen
+    // aus wie eine nie gesetzte Einstellung, nicht wie eine verlorene.
+    if (!fileio::write_text(m_path, doc.dump(2))) {
+        ase::log::error(ase::log::ERR::CAT::HOST_OP_FAILED, kLogSystem,
+                        "settings_write", m_path.c_str());
+    }
 }
 
 void ExplorerSettings::set_breadcrumb_max_segments(int n) noexcept {
