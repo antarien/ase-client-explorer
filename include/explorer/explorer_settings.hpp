@@ -20,16 +20,21 @@
  *
  *              WARUM path() BLEIBT, obwohl es am 2026-08-22 keinen einzigen
  *              fremden Aufrufer hatte — gemessen ueber das ganze Modul, die
- *              drei .path()-Treffer in extension_scan.cpp und
- *              folder_picker.cpp gehoeren zu einem Verzeichniseintrag und
- *              nicht zu dieser Klasse: der Wert ist die einzige Stelle, an
- *              der ein Fehlerfall spaeter benennen kann, WELCHE Datei nicht
- *              gelesen oder nicht geschrieben wurde. Ihn wegzunehmen waere
- *              ein Funktionsverlust ohne Gegenwert, und der Zaehler faellt
- *              dadurch um keinen einzigen Punkt.
+ *              .path()-Treffer in extension_scan.cpp und im Ordnerwaehler
+ *              (heute ase-adp-gtk, adw_folder_picker.cpp) gehoeren zu einem
+ *              Verzeichniseintrag und nicht zu dieser Klasse: der Wert ist
+ *              die einzige Stelle, an der ein Fehlerfall spaeter benennen
+ *              kann, WELCHE Datei nicht gelesen oder nicht geschrieben wurde.
+ *              Ihn wegzunehmen waere ein Funktionsverlust ohne Gegenwert, und
+ *              der Zaehler faellt dadurch um keinen einzigen Punkt.
  *
  * @module      ase-client-explorer
- * @layer       5
+ * @layer       5 (Clients)
+ * @category    persistence
+ * @usecase     usecase:101131 - set explorer preferences
+ * @created     2026-04-14
+ * @modified    2026-10-19
+ * @version     1.0.1
  */
 
 #include <string>

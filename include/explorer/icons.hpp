@@ -4,7 +4,7 @@
  * @file        icons.hpp
  * @brief       NerdFont glyph lookup and Pango markup for file/folder rows
  * @description Resolves filenames to a coloured NerdFont glyph via the generated
- *              sha-web-console/file-icons.hpp tables. Also exposes helpers that
+ *              sha-web-console/file_icons.hpp tables. Also exposes helpers that
  *              wrap the SAME NerdFont rendering for arbitrary semantic UI icons
  *              (settings cog, trash, search, …) sourced from ui_icons.hpp. No
  *              `*-symbolic` gnome-icon-theme names are used anywhere in the
@@ -12,6 +12,11 @@
  *
  * @module      ase-client-explorer
  * @layer       5
+ * @category    render/ui
+ * @usecase     usecase:101002 - show a file icon
+ * @created     2026-04-13
+ * @modified    2026-10-18
+ * @version     1.0.1
  */
 
 #include <string>

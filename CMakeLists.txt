@@ -239,10 +239,11 @@ add_executable(ase-explorer
     src/context_menu.cpp
     src/keyboard_shortcuts.cpp
     src/settings_dialog.cpp
+    src/settings_assoc_page.cpp   # usecase:101130 - map an extension: the Associations page
+    src/settings_assoc_view.cpp
     src/file_associations.cpp
     src/explorer_settings.cpp
     src/open_with_dialog.cpp
-    src/folder_picker.cpp
     src/app_catalog.cpp
     src/extension_scan.cpp
     src/tree_view.cpp
@@ -262,10 +263,11 @@ add_executable(ase-explorer
     include/explorer/context_menu.hpp
     include/explorer/keyboard_shortcuts.hpp
     include/explorer/settings_dialog.hpp
+    include/explorer/settings_page.hpp
+    include/explorer/settings_assoc_view.hpp
     include/explorer/file_associations.hpp
     include/explorer/explorer_settings.hpp
     include/explorer/open_with_dialog.hpp
-    include/explorer/folder_picker.hpp
     include/explorer/app_catalog.hpp
     include/explorer/extension_scan.hpp
     include/explorer/tree_view.hpp

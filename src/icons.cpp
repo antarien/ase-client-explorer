@@ -7,13 +7,18 @@
  *
  * @module      ase-client-explorer
  * @layer       5
+ * @category    render/ui
+ * @usecase     usecase:101002 - show a file icon
+ * @created     2026-04-13
+ * @modified    2026-10-18
+ * @version     1.0.1
  */
 
 #include <explorer/icons.hpp>
 
 #include <ase/utils/strops.hpp>
 
-#include "file-icons.hpp"
+#include "file_icons.hpp"
 
 #include <gtk/gtk.h>
 

@@ -8,7 +8,12 @@
  *              signal so it is freed exactly when the window goes away.
  *
  * @module      ase-client-explorer
- * @layer       5
+ * @layer       5 (Clients)
+ * @category    render/ui/widget
+ * @usecase     usecase:101133 - open a file with
+ * @created     2026-04-14
+ * @modified    2026-10-19
+ * @version     1.0.1
  */
 
 #include <explorer/open_with_dialog.hpp>
@@ -178,8 +183,8 @@ void show(ase::adp::gtk::ApplicationWindow& parent,
 
     // DialogState outlives this function: it is owned by the window and released in
     // on_window_destroy_cb. Allocate via GLib and construct in place so the GTK widget
-    // lifetime, not the C++ stack, governs its destruction - the same form folder_picker.cpp
-    // and settings_dialog.cpp use in this unit.
+    // lifetime, not the C++ stack, governs its destruction - the same form the folder picker
+    // of ase-adp-gtk and the Associations page (settings_assoc_page.cpp) use.
     auto* state = static_cast<DialogState*>(g_malloc0(sizeof(DialogState)));
     new (state) DialogState();
     state->file_path = file_path;
