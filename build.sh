@@ -756,7 +756,7 @@ NINJA_EXIT=${PIPESTATUS[0]}
 # BACK TO COLUMN 0. `script` switches the outer terminal to raw mode while ninja runs, and a raw
 # terminal does not turn "\n" into "\r\n". Every formatter line starts with "\r"; section_line
 # does not - so after "ninja: no work to do." the cursor stood one line down at the column
-# where that line ended, and the next section line began there (usecase:100013 - build one tier).
+# where that line ended, and the next section line began there (usecase:101331 - wrap terminal lines).
 printf "\r"
 
 if [ $NINJA_EXIT -ne 0 ]; then
