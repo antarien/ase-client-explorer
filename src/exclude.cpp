@@ -7,6 +7,10 @@
  *
  * @module      ase-client-explorer
  * @layer       5
+ *
+ * Copyright (c) Jan Ohlmann. All rights reserved.
+ * Licensed to ANTARES SIMULACAO LTDA. Use is governed by LICENSE.md and PJV.md in this repository.
+ * SPDX-License-Identifier: LicenseRef-ASE-LIC
  */
 
 #include <explorer/exclude.hpp>

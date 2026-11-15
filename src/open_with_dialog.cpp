@@ -13,7 +13,11 @@
  * @usecase     usecase:101133 - open a file with
  * @created     2026-04-14
  * @modified    2026-10-19
- * @version     1.0.1
+ * @version     00.00.38.00038 [core]
+ *
+ * Copyright (c) Jan Ohlmann. All rights reserved.
+ * Licensed to ANTARES SIMULACAO LTDA. Use is governed by LICENSE.md and PJV.md in this repository.
+ * SPDX-License-Identifier: LicenseRef-ASE-LIC
  */
 
 #include <explorer/open_with_dialog.hpp>

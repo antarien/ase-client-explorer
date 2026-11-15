@@ -3,6 +3,10 @@
 # ASE Project Explorer — Layer 5 Client
 # Professional Build Script with Ninja
 # ==============================================================================
+#
+# Copyright (c) Jan Ohlmann. All rights reserved.
+# Licensed to ANTARES SIMULACAO LTDA. Use is governed by LICENSE.md and PJV.md in this repository.
+# SPDX-License-Identifier: LicenseRef-ASE-LIC
 
 # NOTE: Do NOT use "set -e" here. This script handles errors explicitly
 # (cmake exit codes, ninja exit codes, validator exit codes).

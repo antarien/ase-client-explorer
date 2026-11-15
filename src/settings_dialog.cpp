@@ -31,7 +31,11 @@
  * @usecase     usecase:101131 - set explorer preferences
  * @created     2026-04-13
  * @modified    2026-10-19
- * @version     1.1.0
+ * @version     00.00.38.00038 [core]
+ *
+ * Copyright (c) Jan Ohlmann. All rights reserved.
+ * Licensed to ANTARES SIMULACAO LTDA. Use is governed by LICENSE.md and PJV.md in this repository.
+ * SPDX-License-Identifier: LicenseRef-ASE-LIC
  *
  * CLIENT NATIVE COMPLIANCE
  *

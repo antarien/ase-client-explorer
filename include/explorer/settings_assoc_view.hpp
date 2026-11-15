@@ -20,6 +20,10 @@
  * @modified    2026-10-19
  * @version     00.00.01.00001 [seed]
  *
+ * Copyright (c) Jan Ohlmann. All rights reserved.
+ * Licensed to ANTARES SIMULACAO LTDA. Use is governed by LICENSE.md and PJV.md in this repository.
+ * SPDX-License-Identifier: LicenseRef-ASE-LIC
+ *
  * CLIENT NATIVE COMPLIANCE
  *
  * [ ] English only - identifiers, comments, messages
