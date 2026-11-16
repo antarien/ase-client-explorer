@@ -343,7 +343,7 @@ fi
 # DER LAEUFER IST DER MASCHINENKANAL, NICHT DIE ANZEIGE (2026-09-16). Bis dahin stand hier ein
 # direkter Aufruf von `run_prebuild_gates.sh`, dessen Ausgabe UNGEFILTERT in die Konsole lief.
 # Der Laeufer druckt `GATE-BEGIN:`, `GATE-SCOPE:`, `GATE-COUNT:`, `GATE-INFO:` und
-# `GATE-SUMMARY:`, damit eine Sitzung ihren Stand AUSWERTEN kann — diese Zeilen brachen quer
+# `GATE-SUMMARY:`, damit sich der Stand AUSWERTEN laesst — diese Zeilen brachen quer
 # durch jede Box: ohne `│`, ohne Symbol, ohne Spalte. Sie sind kein Beiwerk, sondern der
 # Gegenstand: die Batterie LIEST sie und macht daraus die Befund- und die Umfangsspalte.
 #
