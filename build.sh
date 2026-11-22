@@ -1,8 +1,6 @@
 #!/bin/bash
-# ==============================================================================
 # ASE Project Explorer — Layer 5 Client
 # Professional Build Script with Ninja
-# ==============================================================================
 #
 # Copyright (c) Jan Ohlmann. All rights reserved.
 # Licensed to ANTARES SIMULACAO LTDA. Use is governed by LICENSE.md and PJV.md in this repository.
@@ -61,9 +59,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # VERSION file path
 VERSION_FILE="$SCRIPT_DIR/VERSION"
 
-# ============================================
 # VERSION MANAGEMENT FUNCTIONS
-# ============================================
 
 get_version() {
     local key="$1"
@@ -157,9 +153,7 @@ STATUS=$(get_status)
 STATUS_COLOR=$(get_status_color "$STATUS")
 STATUS_ICON=$(get_status_icon "$STATUS")
 
-# ============================================
 # HELP
-# ============================================
 
 if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
     echo -e "${MAGENTA}ASE Project Explorer — Native GTK4 Client${NC}"
@@ -193,9 +187,7 @@ if [ "$1" == "--help" ] || [ "$1" == "-h" ]; then
     exit 0
 fi
 
-# ============================================
 # TARGETS LISTING
-# ============================================
 
 if [ "$1" == "targets" ]; then
     BUILD_DIR="${SCRIPT_DIR}/build"
@@ -227,9 +219,7 @@ if [ "$1" == "targets" ]; then
     exit 0
 fi
 
-# ============================================
 # TARGET COLLECTION (for specific target builds)
-# ============================================
 
 BUILD_TARGETS=()
 REMAINING_ARGS=()
@@ -245,9 +235,7 @@ done
 # Reset positional parameters to non-target args
 set -- "${REMAINING_ARGS[@]}"
 
-# ============================================
 # CLI FLAGS
-# ============================================
 
 DO_RUN=false
 IS_CLEAN=false
@@ -271,9 +259,7 @@ if [ "$BUILD_TYPE" = "Debug" ]; then
     BUILD_MODE="CLI-Debug"
 fi
 
-# ============================================
 # HEADER
-# ============================================
 
 section_header "ASE Project Explorer" 170
 section_line "·" "Native GTK4 hierarchical project explorer"
@@ -282,17 +268,23 @@ section_pipe
 section_line "*" "Version" "v${VERSION} [${STATUS}]"
 section_line "$HASH" "Build Mode" "${BUILD_MODE} (${BUILD_TYPE})"
 
-# ============================================
 # PRE-BUILD VALIDATION PHASE
-# ============================================
 # NOTE: Root ECS validators (validate_header_includes.py, validate_fields.py, etc.)
 # operate on modules/plugins/core via --all/--module flags.
 # Standalone L5 clients are outside their scan scope.
 # Client-specific validators can be added here when needed.
 
-# ============================================
+# One build per build folder (B0671, usecase:100013): a second ninja appending to the same
+# .ninja_deps gives a record a wrong id, ninja truncates the log there and every unit behind it
+# compiles again. A session build facing a held folder is refused; the operator's build stops a
+# session build and waits for another operator build. The lock is held until this script exits.
+# In this client the lock stands before the clean phase, not behind the battery: a second build
+# refused here must not remove the build folder another build holds. Before it runs what it built,
+# ase_build_unlock gives the lock back: a program left open builds nothing and holds no folder.
+source "$SCRIPT_DIR/../../tools/ase-forge/ase-harness/lib/build_lock.sh"
+ase_build_lock "$BUILD_DIR" || exit 1
+
 # CLEAN PHASE
-# ============================================
 
 if [ "$IS_FULLCLEAN" = true ]; then
     section_header "Full Clean" 71
@@ -334,9 +326,7 @@ elif [ "$IS_CLEAN" = true ]; then
     fi
 fi
 
-# ============================================
 # PREBUILD GATES
-# ============================================
 # Bis 2026-08-18 fuhr dieser Einstiegspunkt KEIN einziges Prebuild-Tor — wie fuenf weitere von
 # elf. Ein Tor, das an einer Stelle nicht laeuft, meldet dort nichts, und das sieht aus wie Ruhe.
 #
@@ -367,16 +357,12 @@ source "$_ASE_BATTERY"
 ASE_GATE_LOADS_MODULES=true
 do_pre_validation
 
-# ============================================
 # CREATE BUILD DIRECTORY
-# ============================================
 
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# ============================================
 # CMAKE CONFIGURATION PHASE
-# ============================================
 
 section_header "Build" 214
 
@@ -493,9 +479,7 @@ if [ "$NEEDS_CMAKE" = true ]; then
 fi
 section_pipe
 
-# ============================================
 # NINJA BUILD PHASE
-# ============================================
 
 STEP_START=$(date +%s%3N)
 
@@ -548,7 +532,7 @@ script -qfec "stty cols 10000 2>/dev/null; $BUILD_PREFIX ninja ${NINJA_ARGS[*]}"
 
     while true; do
         if IFS= read -r -t 0.08 line; then
-            # === LINE ARRIVED ===
+            # LINE ARRIVED
 
             # Skip empty/whitespace-only lines (don't touch spinner)
             [[ "$line" =~ ^[[:space:]]*$ ]] && continue
@@ -734,7 +718,7 @@ script -qfec "stty cols 10000 2>/dev/null; $BUILD_PREFIX ninja ${NINJA_ARGS[*]}"
                     fi ;;
             esac
         else
-            # === TIMEOUT OR EOF ===
+            # TIMEOUT OR EOF
             _rc=$?
             if [ $_rc -gt 128 ]; then
                 # Timeout: draw spinner frame while waiting for next step
@@ -771,9 +755,7 @@ STEP_DURATION=$(awk "BEGIN {printf \"%.2f\", ($STEP_END - $STEP_START) / 1000}")
 echo ""
 section_line "$CHECK" "Build complete" "${STEP_DURATION}s" "$BUILD_LW"
 
-# ============================================
 # BUILD SUMMARY
-# ============================================
 
 # Count built artifacts
 BIN_COUNT=$(find bin -type f -executable 2>/dev/null | wc -l)
@@ -796,9 +778,7 @@ section_line "*" "Version" "v${VERSION} [${STATUS}]" 18
 section_line "$HASH" "Build" "#${NEW_BUILD}" 18
 section_line "$CHECK" "Status" "Ready" 18
 
-# ============================================
 # NEXT STEPS
-# ============================================
 
 section_header "Next Steps" 110
 
@@ -807,9 +787,7 @@ section_line "$ARROW" "Debug" "./build.sh debug run"
 section_line "$ARROW" "Targets" "./build.sh targets"
 echo ""
 
-# ============================================
 # RUN (if requested)
-# ============================================
 
 if [ "$DO_RUN" = true ]; then
     EXPLORER_BIN="$BUILD_DIR/bin/ase-explorer"
@@ -817,6 +795,7 @@ if [ "$DO_RUN" = true ]; then
         section_line "$CROSS" "Binary not found" "$EXPLORER_BIN"
         exit 1
     fi
+    ase_build_unlock
     section_header "Run" 71
     section_line "$ARROW" "Starting ase-explorer"
     echo ""
